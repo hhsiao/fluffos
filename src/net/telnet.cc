@@ -42,41 +42,64 @@ struct telnet_t *net_telnet_init(interactive_t *user) {
 }
 
 static inline void on_telnet_data(const char *buffer, unsigned long size, interactive_t *ip) {
-  char *transdata = const_cast<char *>(buffer);
-  auto translen = size;
+  char *step1_data = const_cast<char *>(buffer);
+  auto step1_len = size;
+  bool step1_allocated = false;
 
-  // Handle charset transcoding
+  // STEP 1: Handle encoding (decode GBK/BIG-5 → UTF-8)
   if (ip->trans) {
     UErrorCode error_code = U_ZERO_ERROR;
-    translen = ucnv_toAlgorithmic(UConverterType::UCNV_UTF8, ip->trans, nullptr, 0, buffer, size,
-                                  &error_code);
+    step1_len = ucnv_toAlgorithmic(UConverterType::UCNV_UTF8, ip->trans, nullptr, 0, buffer, size,
+                                   &error_code);
     if (error_code == U_BUFFER_OVERFLOW_ERROR) {
       error_code = U_ZERO_ERROR;
-      transdata = (char *)DMALLOC(translen, TAG_TEMPORARY, "on_telnet_data: transcoding");
-      auto written = ucnv_toAlgorithmic(UConverterType::UCNV_UTF8, ip->trans, transdata, translen,
+      step1_data = (char *)DMALLOC(step1_len, TAG_TEMPORARY, "on_telnet_data: encoding");
+      step1_allocated = true;
+      auto written = ucnv_toAlgorithmic(UConverterType::UCNV_UTF8, ip->trans, step1_data, step1_len,
                                         buffer, size, &error_code);
-      DEBUG_CHECK(written != translen, "Bug: translation buffer size calculation error");
+      DEBUG_CHECK(written != step1_len, "Bug: translation buffer size calculation error");
       if (U_FAILURE(error_code)) {
-        debug_message("add_message: Translation failed!");
-        transdata = const_cast<char *>(buffer);
-        translen = size;
+        debug_message("add_message: Encoding translation failed!");
+        FREE(step1_data);
+        step1_data = const_cast<char *>(buffer);
+        step1_len = size;
+        step1_allocated = false;
       };
     }
   }
 
-  auto sanitized = u8_sanitize({transdata, translen});
+  // STEP 2: Handle transcoding (Simp → Trad) if set
+  std::string transcoded;
+  const char *final_data = step1_data;
+  size_t final_len = step1_len;
+  
+  if (ip->in_translit) {
+    transcoded = u8_transliterate(reinterpret_cast<UTransliterator*>(ip->in_translit), step1_data, step1_len);
+    if (!transcoded.empty()) {
+      final_data = transcoded.c_str();
+      final_len = transcoded.length();
+    }
+  }
+
+  auto sanitized = u8_sanitize({final_data, final_len});
   on_user_input(ip, sanitized.c_str(), sanitized.length());
 
-  if (transdata != buffer) {
-    FREE(transdata);
+  if (step1_allocated) {
+    FREE(step1_data);
   }
 }
 
 static inline void on_telnet_send(const char *buffer, unsigned long size, interactive_t *ip) {
-  //no need to test if binary as only binary enables telnet
   if(ip->connection_type == PORT_TYPE_WEBSOCKET) {
-    auto transdata = u8_convert_encoding(ip->trans, buffer, size);
-    auto result = transdata.empty() ? std::string_view(buffer, size) : transdata;
+    // STEP 1: Apply transcoding
+    auto transcoded = u8_transliterate(reinterpret_cast<UTransliterator*>(ip->out_translit), buffer, size);
+    auto step1_data = transcoded.empty() ? buffer : transcoded.c_str();
+    auto step1_len = transcoded.empty() ? size : transcoded.length();
+    
+    // STEP 2: Apply encoding
+    auto encoded = u8_convert_encoding(ip->trans, step1_data, step1_len);
+    auto result = encoded.empty() ? std::string_view(step1_data, step1_len) : encoded;
+    
     websocket_send_text(ip->lws, result.data(), result.size());
   }
   else

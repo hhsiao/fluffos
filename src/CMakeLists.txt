@@ -204,7 +204,7 @@ find_package(OpenSSL 1.0.1 COMPONENTS SSL REQUIRED)
 include_directories(AFTER SYSTEM ${OPENSSL_INCLUDE_DIR})
 
 set(ICU_DEBUG ON)
-find_package(ICU REQUIRED COMPONENTS uc dt)
+find_package(ICU REQUIRED COMPONENTS uc dt i18n)
 # Make ICU use utf-8 internally
 add_compile_options("-DU_CHARSET_IS_UTF8=1")
 if(STATIC)

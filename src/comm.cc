@@ -564,14 +564,21 @@ void add_message(object_t *who, const char *data, int len) {
   switch (ip->connection_type) {
     case PORT_TYPE_ASCII:
     case PORT_TYPE_TELNET: {
-      auto transdata = u8_convert_encoding(ip->trans, data, len);
-      auto result = transdata.empty() ? std::string_view(data, len) : transdata;
-      inet_volume += result.size();
-      if (ip->connection_type == PORT_TYPE_TELNET) {
-        telnet_send_text(ip->telnet, result.data(), result.size());
-      } else {
-        bufferevent_write(ip->ev_buffer, result.data(), result.size());
-      }
+        // STEP 1: Apply transcoding (Trad → Simp) if set
+        auto transcoded = u8_transliterate(reinterpret_cast<UTransliterator*>(ip->out_translit), data, len);
+        auto step1_data = transcoded.empty() ? data : transcoded.c_str();
+        auto step1_len = transcoded.empty() ? len : transcoded.length();
+        
+        // STEP 2: Apply encoding (UTF-8 → GBK/BIG-5) if set
+        auto encoded = u8_convert_encoding(ip->trans, step1_data, step1_len);
+        auto result = encoded.empty() ? std::string_view(step1_data, step1_len) : encoded;
+        
+        inet_volume += result.size();
+        if (ip->connection_type == PORT_TYPE_TELNET) {
+            telnet_send_text(ip->telnet, result.data(), result.size());
+        } else {
+            bufferevent_write(ip->ev_buffer, result.data(), result.size());
+        }
     } break;
     case PORT_TYPE_WEBSOCKET: {
       if (ip->iflags & HANDSHAKE_COMPLETE) {
@@ -1330,6 +1337,16 @@ void remove_interactive(object_t *ob, int dested) {
   if (ip->trans != nullptr) {
     ucnv_close(ip->trans);
     ip->trans = nullptr;
+  }
+
+  // Free transliterators
+  if (ip->in_translit != nullptr) {
+    delete reinterpret_cast<UTransliterator*>(ip->in_translit);
+    ip->in_translit = nullptr;
+  }
+  if (ip->out_translit != nullptr) {
+    delete reinterpret_cast<UTransliterator*>(ip->out_translit);
+    ip->out_translit = nullptr;
   }
 
   clear_notify(ip->ob);

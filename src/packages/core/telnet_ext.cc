@@ -124,8 +124,15 @@ void f_send_gmcp() {
   const auto *data = sp->u.string;
   auto len = SVALUE_STRLEN(sp);
   if (ip && ip->telnet) {
-    std::string const transdata = u8_convert_encoding(ip->trans, data, len);
-    std::string_view const result = transdata.empty() ? std::string_view(data, len) : transdata;
+    // STEP 1: Apply transcoding
+    std::string transcoded = u8_transliterate(reinterpret_cast<UTransliterator*>(ip->out_translit), data, len);
+    auto step1_data = transcoded.empty() ? data : transcoded.c_str();
+    auto step1_len = transcoded.empty() ? len : transcoded.length();
+    
+    // STEP 2: Apply encoding
+    std::string const encoded = u8_convert_encoding(ip->trans, step1_data, step1_len);
+    std::string_view const result = encoded.empty() ? std::string_view(step1_data, step1_len) : encoded;
+    
     telnet_subnegotiation(ip->telnet, TELNET_TELOPT_GMCP, result.data(), result.size());
     flush_message(ip);
   } else if (!ip) {

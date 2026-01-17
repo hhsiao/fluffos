@@ -341,6 +341,10 @@ string string_decode(buffer, string);
 buffer string_encode(string, string);
 buffer buffer_transcode(buffer, string, string);
 
+string set_transcoding(string | void);
+string query_transcoding();
+string string_translit(string, string);
+
 void act_mxp();
 void request_term_type();
 void start_request_term_type();

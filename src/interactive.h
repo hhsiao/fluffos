@@ -73,7 +73,9 @@ struct interactive_t {
   unsigned int iflags; /* interactive flags */
 
   // iconv handle
-  UConverter *trans;
+  UConverter *trans;              // Encoding
+  void *in_translit;   // Input transliterator (UTransliterator*)
+  void *out_translit;  // Output transliterator (UTransliterator*)
 
   // libtelnet handle
   struct telnet_t *telnet;

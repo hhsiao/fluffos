@@ -6,12 +6,14 @@
 #include <unicode/brkiter.h>
 #include <unicode/unistr.h>
 #include <unicode/ucnv.h>
+#include <unicode/translit.h>
 
 #include <algorithm>
 #include <functional>
 #include <cctype>
 #include <locale>
 #include <string>
+#include <string_view>
 
 #include "base/internal/EGCIterator.h"
 
@@ -200,4 +202,5 @@ int32_t u8_egc_find_as_offset(EGCIterator &iter, const char *needle, size_t need
 
 std::vector<std::string_view> u8_egc_split(const char *src, int32_t slen);
 std::string u8_convert_encoding(UConverter *trans, const char *data, int len);
+std::string u8_transliterate(UTransliterator *translit, const char *data, int len);
 #endif  // STRUTILS_H

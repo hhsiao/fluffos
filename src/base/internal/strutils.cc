@@ -553,3 +553,25 @@ std::string u8_convert_encoding(UConverter *trans, const char *data, int len) {
   }
   return result;
 }
+
+// Return empty string if error or invalid transliterator.
+std::string u8_transliterate(UTransliterator *translit, const char *data, int len) {
+  std::string result;
+
+  if (translit && data && len > 0) {
+    // UTransliterator is a typedef for void*, but in C++ API it's actually icu::Transliterator*
+    // We need to cast it properly to use the C++ API
+    auto *trans = reinterpret_cast<icu::Transliterator*>(translit);
+    
+    // Convert to UnicodeString
+    icu::UnicodeString ustr(data, static_cast<int32_t>(len), "UTF-8");
+    
+    // Perform transliteration
+    trans->transliterate(ustr);
+    
+    // Convert back to UTF-8 string
+    ustr.toUTF8String(result);
+  }
+  
+  return result;
+}
