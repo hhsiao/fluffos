@@ -7,6 +7,9 @@
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
 #include <string>
+#include <vector>
+#include <algorithm>
+#include <cctype>
 #include <unicode/ucnv.h>
 
 #include "comm.h"
@@ -305,6 +308,79 @@ static inline void on_telnet_dont(unsigned char cmd, interactive_t *ip) {
   }
 }
 
+/* Handle CHARSET subnegotiation from client */
+static void on_telnet_charset_subneg(const char *buffer, unsigned int size, interactive_t *ip) {
+  if (size < 2) {
+    return; // Invalid, too short
+  }
+
+  unsigned char opcode = buffer[0];
+  
+  // We only care about ACCEPTED (opcode 2) or REQUEST (opcode 1)
+  if (opcode == 2) { // ACCEPTED
+    // Format: ACCEPTED <encoding>
+    std::string encoding(buffer + 1, size - 1);
+    
+    // Clean up the encoding name (remove spaces, convert to uppercase)
+    encoding.erase(std::remove_if(encoding.begin(), encoding.end(), ::isspace), encoding.end());
+    std::transform(encoding.begin(), encoding.end(), encoding.begin(), ::toupper);
+    
+    debug(telnet, "Client accepted CHARSET: %s\n", encoding.c_str());
+    
+    // Set the encoding using ICU
+    if (encoding == "UTF-8" || encoding == "UTF8") {
+      // UTF-8 is default, no transcoding needed
+      if (ip->trans) {
+        ucnv_close(ip->trans);
+        ip->trans = nullptr;
+      }
+      debug(telnet, "CHARSET encoding set to UTF-8 (no transcoding)\n");
+    } else if (encoding == "GBK" || encoding == "GB2312" || encoding == "GB18030") {
+      // Set GBK encoding
+      UErrorCode error_code = U_ZERO_ERROR;
+      UConverter *new_trans = ucnv_open("GBK", &error_code);
+      
+      if (U_SUCCESS(error_code)) {
+        if (ip->trans) {
+          ucnv_close(ip->trans);
+        }
+        ip->trans = new_trans;
+        debug(telnet, "CHARSET encoding set to GBK\n");
+      } else {
+        debug(telnet, "Failed to open GBK converter: %s\n", u_errorName(error_code));
+      }
+    } else if (encoding == "BIG5" || encoding == "BIG-5") {
+      // Set BIG5 encoding
+      UErrorCode error_code = U_ZERO_ERROR;
+      UConverter *new_trans = ucnv_open("BIG5", &error_code);
+      
+      if (U_SUCCESS(error_code)) {
+        if (ip->trans) {
+          ucnv_close(ip->trans);
+        }
+        ip->trans = new_trans;
+        debug(telnet, "CHARSET encoding set to BIG5\n");
+      } else {
+        debug(telnet, "Failed to open BIG5 converter: %s\n", u_errorName(error_code));
+      }
+    } else {
+      debug(telnet, "Client requested unsupported encoding: %s, staying with current\n", encoding.c_str());
+    }
+    
+  } else if (opcode == 1) { // REQUEST from client (rare, but handle it)
+    // Client is asking us to choose. We prefer UTF-8.
+    const char response[] = {
+        2, // ACCEPTED opcode
+        'U', 'T', 'F', '-', '8'
+    };
+    
+    telnet_begin_sb(ip->telnet, TELNET_TELOPT_CHARSET);
+    telnet_send(ip->telnet, response, sizeof(response));
+    telnet_finish_sb(ip->telnet);
+    debug(telnet, "Client sent CHARSET REQUEST, responded with UTF-8\n");
+  }
+}
+
 static inline void on_telnet_subnegotiation(unsigned char cmd, const char *buf, unsigned long size,
                                             interactive_t *ip) {
   // NOTE: I received bug report that with following data sequences:
@@ -405,6 +481,10 @@ static inline void on_telnet_subnegotiation(unsigned char cmd, const char *buf, 
       push_malloced_string(str);
       set_eval(max_eval_cost);
       safe_apply(APPLY_MSDP, ip->ob, 1, ORIGIN_DRIVER);
+      break;
+    }
+    case TELNET_TELOPT_CHARSET: {
+      on_telnet_charset_subneg(buf, size, ip);
       break;
     }
     default: {
@@ -701,13 +781,56 @@ void on_telnet_do_zmp(const char **argv, unsigned long argc, interactive_t *ip) 
   safe_apply(APPLY_ZMP, ip->ob, 2, ORIGIN_DRIVER);
 }
 
-/* send CHARSET OF UTF-8 command */
-void on_telnet_do_charset(telnet_t *telnet) {
-  const char utf8[] = {
-      1, ';', 'U', 'T', 'F', '-', '8',
-  };
-
+/* Send CHARSET REQUEST with supported encodings, with preferred encoding first */
+static void send_charset_request(telnet_t *telnet, const char *preferred) {
+  // Build the CHARSET REQUEST dynamically based on preference
+  std::string request;
+  request += (char)1;  // REQUEST opcode
+  request += ';';      // separator
+  
+  // List of all supported encodings
+  std::vector<std::string> encodings = {"UTF-8", "GBK", "BIG5"};
+  
+  // If there's a preferred encoding, put it first
+  if (preferred && preferred[0]) {
+    std::string pref_upper = preferred;
+    std::transform(pref_upper.begin(), pref_upper.end(), pref_upper.begin(), ::toupper);
+    
+    // Add preferred encoding first
+    request += pref_upper;
+    request += ';';
+    
+    // Add remaining encodings
+    for (const auto& enc : encodings) {
+      if (enc != pref_upper) {
+        request += enc;
+        request += ';';
+      }
+    }
+  } else {
+    // No preference, use default order: UTF-8, GBK, BIG5
+    for (const auto& enc : encodings) {
+      request += enc;
+      request += ';';
+    }
+  }
+  
+  // Remove trailing semicolon
+  if (!request.empty() && request.back() == ';') {
+    request.pop_back();
+  }
+  
   telnet_begin_sb(telnet, TELNET_TELOPT_CHARSET);
-  telnet_send(telnet, utf8, sizeof(utf8));
+  telnet_send(telnet, request.c_str(), request.length());
   telnet_finish_sb(telnet);
+}
+
+/* Send CHARSET REQUEST with default order (UTF-8 first) */
+void on_telnet_do_charset(telnet_t *telnet) {
+  send_charset_request(telnet, "UTF-8");
+}
+
+/* Send CHARSET REQUEST with specified preferred encoding */
+void on_telnet_do_charset_prefer(telnet_t *telnet, const char *preferred) {
+  send_charset_request(telnet, preferred);
 }

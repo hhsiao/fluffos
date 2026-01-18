@@ -33,6 +33,7 @@ void on_telnet_will_mxp(struct interactive_t *);
 void on_telnet_do_zmp(const char **, unsigned long, interactive_t *);
 void on_telnet_do_gmcp(struct interactive_t *);
 void on_telnet_do_charset(telnet_t *telnet);
+void on_telnet_do_charset_prefer(telnet_t *telnet, const char *preferred);
 void on_telnet_do_msdp(struct interactive_t *);
 
 #endif /* TELNET_H_ */

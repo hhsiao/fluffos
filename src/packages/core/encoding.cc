@@ -2,6 +2,10 @@
 
 #include <unicode/ucnv.h>
 
+#ifdef F_RENEGOTIATE_CHARSET
+#include "net/telnet.h"
+#endif
+
 namespace {
 const char *default_encoding = "utf-8";
 }  // namespace
@@ -200,5 +204,40 @@ void f_buffer_transcode() {
   }
   pop_3_elems();
   push_refed_buffer(res);
+}
+#endif
+
+#ifdef F_RENEGOTIATE_CHARSET
+void f_renegotiate_charset() {
+  // Get preferred encoding from stack (optional)
+  const char *preferred = nullptr;
+  if (st_num_arg > 0) {
+    preferred = sp->u.string;
+  }
+  
+  if (!command_giver || !command_giver->interactive) {
+    if (st_num_arg > 0) {
+      pop_stack();
+    }
+    error("renegotiate_charset() can only be called on interactive users");
+  }
+  
+  auto *ip = command_giver->interactive;
+  if (!ip->telnet) {
+    if (st_num_arg > 0) {
+      pop_stack();
+    }
+    error("renegotiate_charset() requires telnet connection");
+  }
+  
+  // Send CHARSET REQUEST with preferred encoding first
+  if (st_num_arg > 0 && preferred) {
+    on_telnet_do_charset_prefer(ip->telnet, preferred);
+    pop_stack();
+  } else {
+    on_telnet_do_charset(ip->telnet);
+  }
+  
+  push_number(1); // Success
 }
 #endif
