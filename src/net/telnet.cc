@@ -327,6 +327,15 @@ static void on_telnet_charset_subneg(const char *buffer, unsigned int size, inte
     
     debug(telnet, "Client accepted CHARSET: %s\n", encoding.c_str());
     
+    // Store what the client accepted - use DMALLOC for a real copy
+    if (ip->client_charset) {
+      FREE((char *)ip->client_charset);
+    }
+    // Create a real heap-allocated copy, not a shared string
+    char *charset_copy = (char *)DMALLOC(encoding.length() + 1, TAG_TEMPORARY, "client_charset");
+    strcpy(charset_copy, encoding.c_str());
+    ip->client_charset = charset_copy;
+    
     // Set the encoding using ICU
     if (encoding == "UTF-8" || encoding == "UTF8") {
       // UTF-8 is default, no transcoding needed
@@ -373,6 +382,14 @@ static void on_telnet_charset_subneg(const char *buffer, unsigned int size, inte
         2, // ACCEPTED opcode
         'U', 'T', 'F', '-', '8'
     };
+    
+    // Store that we told client to use UTF-8 - use DMALLOC
+    if (ip->client_charset) {
+      FREE((char *)ip->client_charset);
+    }
+    char *charset_copy = (char *)DMALLOC(6, TAG_TEMPORARY, "client_charset");
+    strcpy(charset_copy, "UTF-8");
+    ip->client_charset = charset_copy;
     
     telnet_begin_sb(ip->telnet, TELNET_TELOPT_CHARSET);
     telnet_send(ip->telnet, response, sizeof(response));

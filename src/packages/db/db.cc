@@ -1122,7 +1122,8 @@ static int Postgres_execute(dbconn_t *c, const char *s) {
   }
 
   if (PQresultStatus(c->postgres.res) == PGRES_COMMAND_OK) {
-    return 0;
+    char *affected = PQcmdTuples(c->postgres.res);
+    return atoi(affected);  // Convert string to int
   }
 
   debug_message("FT: Query failed: \"%s\"\n", PQresultErrorMessage(c->postgres.res));

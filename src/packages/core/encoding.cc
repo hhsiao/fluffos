@@ -241,3 +241,25 @@ void f_renegotiate_charset() {
   push_number(1); // Success
 }
 #endif
+
+#ifdef F_QUERY_CHARSET
+void f_query_charset() {
+  if (!command_giver || !command_giver->interactive) {
+    push_undefined();
+    return;
+  }
+  
+  auto *ip = command_giver->interactive;
+  
+  // Return the client's negotiated charset
+  if (ip->client_charset) {
+    // Create a new malloced string copy
+    char *str = new_string(strlen(ip->client_charset), "f_query_charset");
+    strcpy(str, ip->client_charset);
+    push_malloced_string(str);
+  } else {
+    // No CHARSET negotiation happened, return undefined
+    push_undefined();
+  }
+}
+#endif

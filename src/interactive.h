@@ -76,6 +76,7 @@ struct interactive_t {
   UConverter *trans;              // Encoding
   void *in_translit;   // Input transliterator (UTransliterator*)
   void *out_translit;  // Output transliterator (UTransliterator*)
+  const char *client_charset;  // Client's negotiated CHARSET (TELNET)
 
   // libtelnet handle
   struct telnet_t *telnet;

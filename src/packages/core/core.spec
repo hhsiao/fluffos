@@ -341,6 +341,7 @@ string string_decode(buffer, string);
 buffer string_encode(string, string);
 buffer buffer_transcode(buffer, string, string);
 int renegotiate_charset(string | void);
+string query_charset();
 
 string set_transcoding(string | void);
 string query_transcoding();

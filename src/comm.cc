@@ -229,6 +229,7 @@ interactive_t *new_user(port_def_t *port, evutil_socket_t fd, sockaddr *addr,
   user->ob = master_ob;
   user->last_time = get_current_time();
   user->trans = nullptr;
+  user->client_charset = nullptr;
   user->fd = fd;
   user->local_port = port->port;
   user->external_port = (port - external_port);  // FIXME: pointer arith
@@ -1347,6 +1348,12 @@ void remove_interactive(object_t *ob, int dested) {
   if (ip->out_translit != nullptr) {
     delete reinterpret_cast<UTransliterator*>(ip->out_translit);
     ip->out_translit = nullptr;
+  }
+
+  // Free client charset string
+  if (ip->client_charset != nullptr) {
+    FREE((char *)ip->client_charset);
+    ip->client_charset = nullptr;
   }
 
   clear_notify(ip->ob);
