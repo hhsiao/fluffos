@@ -144,6 +144,7 @@ void dealloc_mapping(mapping_t *m) {
   }
 
   debug(mapping, ("in free_mapping: after table\n"));
+  free_mapping_watch(m);
   FREE(m);
   num_mappings--;
   total_mapping_size -= sizeof(mapping_t);
@@ -268,7 +269,8 @@ mapping_t *allocate_mapping(int n) {
   if (newmap == nullptr) {
     error("Allocate_mapping - out of memory.\n");
   }
-
+  
+  memset(newmap, 0, sizeof(mapping_t));
   if (n > MAP_HASH_TABLE_SIZE) {
     n |= n >> 1;
     n |= n >> 2;
@@ -290,6 +292,7 @@ mapping_t *allocate_mapping(int n) {
   total_mapping_size += sizeof(mapping_t) + n;
   newmap->ref = 1;
   newmap->count = 0;
+  newmap->watch = nullptr;
 #ifdef PACKAGE_MUDLIB_STATS
   if (current_object) {
     assign_stats(&newmap->stats, current_object);
@@ -367,6 +370,7 @@ static mapping_t *copyMapping(mapping_t *m) {
     error("copyMapping 2 - out of memory.\n");
   }
   newmap->count = m->count;
+  newmap->watch = nullptr;
   total_mapping_nodes += MAP_COUNT(m);
   memset(c, 0, k * sizeof(mapping_node_t *));
   total_mapping_size +=
@@ -498,6 +502,9 @@ void mapping_delete(mapping_t *m, svalue_t *lv) {
   if ((elt = *prev)) {
     do {
       if (msameval(elt->values, lv)) {
+        if (m->watch) {
+            mapping_fire_watch(m, elt->values, elt->values + 1, &const0u);
+        }
         if (!(*prev = elt->next) && !m->table[i]) {
           m->unfilled++;
           debug(mapping, "mapping delete: bucket empty, unfilled = %i", m->unfilled);
@@ -1266,4 +1273,78 @@ void add_mapping_shared_string(mapping_t *m, const char *key, char *value) {
   s->type = T_STRING;
   s->subtype = STRING_SHARED;
   s->u.string = ref_string(value);
+}
+
+int mapping_add_watch(mapping_t *m, funptr_t *fp) {
+  if (!m->watch) {
+    m->watch = reinterpret_cast<mapping_watch_t *>(
+        DMALLOC(sizeof(mapping_watch_t), TAG_MAPPING, "mapping_add_watch"));
+    if (!m->watch) return 0;
+    m->watch->num_callbacks = 0;
+    for (int i = 0; i < MAX_MAPPING_WATCHERS; i++)
+      m->watch->callbacks[i] = nullptr;
+  }
+  if (m->watch->num_callbacks >= MAX_MAPPING_WATCHERS) return 0;
+  fp->hdr.ref++;
+  m->watch->callbacks[m->watch->num_callbacks++] = fp;
+  return 1;
+}
+
+int mapping_remove_watch(mapping_t *m, funptr_t *fp) {
+  if (!m->watch) return 0;
+  for (int i = 0; i < m->watch->num_callbacks; i++) {
+    if (m->watch->callbacks[i] == fp) {
+      free_funp(m->watch->callbacks[i]);
+      for (int j = i; j < m->watch->num_callbacks - 1; j++)
+        m->watch->callbacks[j] = m->watch->callbacks[j + 1];
+      m->watch->num_callbacks--;
+      m->watch->callbacks[m->watch->num_callbacks] = nullptr;
+      if (m->watch->num_callbacks == 0) {
+        FREE(m->watch);
+        m->watch = nullptr;
+      }
+      return 1;
+    }
+  }
+  return 0;
+}
+
+void mapping_fire_watch(mapping_t *m, svalue_t *key,
+                        svalue_t *old_val, svalue_t *new_val) {
+  if (!m->watch || m->watch->num_callbacks == 0) return;
+
+  m->ref++;  /* protect mapping during callbacks */
+
+  /* Build key array: ({ key }) */
+  array_t *keys = allocate_empty_array(1);
+  assign_svalue_no_free(&keys->item[0], key);
+
+  for (int i = 0; i < m->watch->num_callbacks; i++) {
+    funptr_t *fp = m->watch->callbacks[i];
+    if (!fp || !fp->hdr.owner || (fp->hdr.owner->flags & O_DESTRUCTED))
+      continue;
+
+    push_mapping(m);         /* arg 1: mapping (adds ref) */
+    push_refed_array(keys);  /* arg 2: keys array */
+    keys->ref++;             /* extra ref for next iteration */
+    push_svalue(old_val);    /* arg 3: old value */
+    push_svalue(new_val);    /* arg 4: new value */
+    safe_call_function_pointer(fp, 4);
+  }
+
+  /* Undo the extra ref from the last iteration (or initial if 0 callbacks ran) */
+  free_array(keys);
+
+  free_mapping(m);  /* undo protective ref */
+}
+
+void free_mapping_watch(mapping_t *m) {
+  if (!m->watch) return;
+  for (int i = 0; i < m->watch->num_callbacks; i++) {
+    if (m->watch->callbacks[i]) {
+      free_funp(m->watch->callbacks[i]);
+    }
+  }
+  FREE(m->watch);
+  m->watch = nullptr;
 }

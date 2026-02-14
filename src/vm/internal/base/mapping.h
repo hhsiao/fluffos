@@ -10,6 +10,19 @@
 // TODO: remove this.
 #define MAX_MAPPING_SIZE CONFIG_INT(__MAX_MAPPING_SIZE__)
 
+#define MAX_MAPPING_WATCHERS 4 /* max # of watchers per mapping element */
+typedef struct mapping_watch_s {
+  struct funptr_t *callbacks[MAX_MAPPING_WATCHERS];
+  int num_callbacks;
+} mapping_watch_t;
+
+struct global_lvalue_mapping_watched_s {
+  mapping_t *map;
+  svalue_t key;
+  svalue_t *lvalue;
+};
+extern struct global_lvalue_mapping_watched_s global_lvalue_mapping_watched;
+
 #define MAP_SVAL_HASH(x) sval_hash(x)
 
 // #define MAP_SVAL_HASH(x) (((POINTER_INT)((x).u.number)) >> 5)
@@ -49,6 +62,7 @@ struct mapping_t {
 #ifdef PACKAGE_MUDLIB_STATS
   struct statgroup_t stats; /* creators of the mapping */
 #endif
+  mapping_watch_t *watch; /* watchers for changes to mapping elements */
 };
 
 typedef struct finfo_s {
@@ -111,5 +125,9 @@ void add_mapping_malloced_string(mapping_t *, const char *, char *);
 void add_mapping_object(mapping_t *, const char *, object_t *);
 void add_mapping_array(mapping_t *, const char *, array_t *);
 void add_mapping_shared_string(mapping_t *, const char *, char *);
+int mapping_add_watch(mapping_t *m, funptr_t *fp);
+int mapping_remove_watch(mapping_t *m, funptr_t *fp);
+void mapping_fire_watch(mapping_t *m, svalue_t *key, svalue_t *old_val, svalue_t *new_val);
+void free_mapping_watch(mapping_t *m);
 
 #endif /* _MAPPING_H */

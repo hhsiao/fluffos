@@ -530,6 +530,41 @@ void pop_stack() {
 
 svalue_t global_lvalue_byte = {T_LVALUE_BYTE};
 
+struct global_lvalue_mapping_watched_s global_lvalue_mapping_watched = {nullptr, {T_NUMBER}, nullptr};
+
+static svalue_t global_lvalue_mapping_watched_sv = {T_LVALUE_MAPPING_WATCHED};
+
+/*
+ * Resolve a watched mapping lvalue.
+ * If the lvalue points to T_LVALUE_MAPPING_WATCHED, return the real
+ * lvalue inside the mapping and save old_val for later callback.
+ * Otherwise return the lvalue unchanged.
+ *
+ * Call notify_watched_lvalue() AFTER mutation to fire callbacks.
+ */
+static inline svalue_t *resolve_watched_lvalue(svalue_t *lval,
+                                                svalue_t *out_old_val,
+                                                mapping_t **out_map) {
+  *out_map = nullptr;
+  if (lval->type == T_LVALUE_MAPPING_WATCHED) {
+    *out_map = global_lvalue_mapping_watched.map;
+    svalue_t *real_lval = global_lvalue_mapping_watched.lvalue;
+    assign_svalue_no_free(out_old_val, real_lval);
+    return real_lval;
+  }
+  return lval;
+}
+
+static inline void notify_watched_lvalue(mapping_t *map,
+                                          svalue_t *old_val,
+                                          svalue_t *new_val) {
+  if (map) {
+    mapping_fire_watch(map, &global_lvalue_mapping_watched.key,
+                       old_val, new_val);
+    free_svalue(old_val, "notify_watched_lvalue");
+  }
+}
+
 int lv_owner_type;
 refed_t *lv_owner;
 const char *lv_owner_str;
@@ -551,20 +586,32 @@ void push_indexed_lvalue(int reverse) {
 
   if (sp->type == T_LVALUE) {
     lv = sp->u.lvalue;
-    if (!reverse && lv->type == T_MAPPING) {
-      sp--;
-      if (!(lv = find_for_insert(lv->u.map, sp, 0))) {
-        mapping_too_large();
-      }
-      free_svalue(sp, "push_indexed_lvalue: 1");
-      sp->type = T_LVALUE;
-      sp->u.lvalue = lv;
+        if (!reverse && lv->type == T_MAPPING) {
+          mapping_t *thismap = lv->u.map;
+          sp--;
+          if (!(lv = find_for_insert(thismap, sp, 0))) {
+            mapping_too_large();
+          }
+          if (thismap->watch) {
+            free_svalue(&global_lvalue_mapping_watched.key,
+                        "push_indexed_lvalue: watched key");
+            assign_svalue_no_free(&global_lvalue_mapping_watched.key, sp);
+            global_lvalue_mapping_watched.map = thismap;
+            global_lvalue_mapping_watched.lvalue = lv;
+            free_svalue(sp, "push_indexed_lvalue: 1");
+            sp->type = T_LVALUE;
+            sp->u.lvalue = &global_lvalue_mapping_watched_sv;
+          } else {
+            free_svalue(sp, "push_indexed_lvalue: 1");
+            sp->type = T_LVALUE;
+            sp->u.lvalue = lv;
+          }
 #ifdef REF_RESERVED_WORD
-      lv_owner_type = T_MAPPING;
-      lv_owner = reinterpret_cast<refed_t *>(lv->u.map);
+          lv_owner_type = T_MAPPING;
+          lv_owner = reinterpret_cast<refed_t *>(thismap);
 #endif
-      return;
-    }
+          return;
+        }
 
     if (!((--sp)->type == T_NUMBER)) {
       error("Illegal type of index\n");
@@ -645,20 +692,32 @@ void push_indexed_lvalue(int reverse) {
     /* Where x is a _valid_ lvalue */
     /* Hence the reference to sp is at least 2 :) */
 
-    if (!reverse && (sp->type == T_MAPPING)) {
-      if (!(lv = find_for_insert(sp->u.map, sp - 1, 0))) {
-        mapping_too_large();
-      }
-      sp->u.map->ref--;
+        if (!reverse && (sp->type == T_MAPPING)) {
+          mapping_t *thismap = sp->u.map;
+          if (!(lv = find_for_insert(thismap, sp - 1, 0))) {
+            mapping_too_large();
+          }
+          thismap->ref--;
+          if (thismap->watch) {
+            free_svalue(&global_lvalue_mapping_watched.key,
+                        "push_indexed_lvalue: watched key 2");
+            assign_svalue_no_free(&global_lvalue_mapping_watched.key, sp - 1);
+            global_lvalue_mapping_watched.map = thismap;
+            global_lvalue_mapping_watched.lvalue = lv;
+            free_svalue(--sp, "push_indexed_lvalue: 2");
+            sp->type = T_LVALUE;
+            sp->u.lvalue = &global_lvalue_mapping_watched_sv;
+          } else {
+            free_svalue(--sp, "push_indexed_lvalue: 2");
+            sp->type = T_LVALUE;
+            sp->u.lvalue = lv;
+          }
 #ifdef REF_RESERVED_WORD
-      lv_owner_type = T_MAPPING;
-      lv_owner = reinterpret_cast<refed_t *>(sp->u.map);
+          lv_owner_type = T_MAPPING;
+          lv_owner = reinterpret_cast<refed_t *>(thismap);
 #endif
-      free_svalue(--sp, "push_indexed_lvalue: 2");
-      sp->type = T_LVALUE;
-      sp->u.lvalue = lv;
-      return;
-    }
+          return;
+        }
 
     if (!((sp - 1)->type == T_NUMBER)) {
       error("Illegal type of index\n");
@@ -2053,6 +2112,21 @@ void eval_instruction(char *p) {
             assign_lvalue_codepoint([](UChar32 c) { return c + 1; });
             break;
           }
+          case T_LVALUE_MAPPING_WATCHED: {
+            svalue_t *rl = global_lvalue_mapping_watched.lvalue;
+            if (rl->type == T_NUMBER) {
+              svalue_t ov = *rl;
+              rl->u.number++;
+              mapping_fire_watch(global_lvalue_mapping_watched.map,
+                  &global_lvalue_mapping_watched.key, &ov, rl);
+            } else if (rl->type == T_REAL) {
+              svalue_t ov = *rl;
+              rl->u.real++;
+              mapping_fire_watch(global_lvalue_mapping_watched.map,
+                  &global_lvalue_mapping_watched.key, &ov, rl);
+            } else error("++ of non-numeric argument\n");
+            break;
+          }
           default:
             error("++ of non-numeric argument\n");
         }
@@ -2529,9 +2603,16 @@ void eval_instruction(char *p) {
         break;
       }
       case F_VOID_ADD_EQ:
-      case F_ADD_EQ:
+      case F_ADD_EQ: {
         if (sp->type != T_LVALUE) error("Invalid Program: non-lvalue argument to +=.");
         lval = sp->u.lvalue;
+        mapping_t *watched_map = nullptr;
+        svalue_t watched_old_val;
+        if (lval->type == T_LVALUE_MAPPING_WATCHED) {
+        watched_map = global_lvalue_mapping_watched.map;
+        lval = global_lvalue_mapping_watched.lvalue;
+        assign_svalue_no_free(&watched_old_val, lval);
+        }
         sp--; /* points to the RHS */
         switch (lval->type) {
           case T_STRING:
@@ -2640,7 +2721,14 @@ void eval_instruction(char *p) {
            */
           sp--;
         }
+        if (watched_map) {
+        mapping_fire_watch(watched_map,
+                            &global_lvalue_mapping_watched.key,
+                            &watched_old_val, lval);
+        free_svalue(&watched_old_val, "F_ADD_EQ watched");
+        }
         break;
+      }
       case F_AND:
         f_and();
         break;
@@ -2931,6 +3019,14 @@ void eval_instruction(char *p) {
             assign_lvalue_codepoint([=](UChar32 c) { return newc; });
             break;
           }
+          case T_LVALUE_MAPPING_WATCHED: {
+            svalue_t old_val;
+            mapping_t *wmap;
+            svalue_t *real_lval = resolve_watched_lvalue(sp->u.lvalue,
+                                                          &old_val, &wmap);
+            assign_svalue(real_lval, sp - 1);
+            notify_watched_lvalue(wmap, &old_val, sp - 1);
+          } break;
           default:
             assign_svalue(sp->u.lvalue, sp - 1);
             break;
@@ -2977,6 +3073,16 @@ void eval_instruction(char *p) {
               UChar32 newc = sp->u.number;
               assign_lvalue_codepoint([=](UChar32 c) { return newc; });
               pop_stack();
+              break;
+            }
+            case T_LVALUE_MAPPING_WATCHED: {
+              svalue_t old_val;
+              mapping_t *wmap;
+              svalue_t *real_lval = resolve_watched_lvalue(lval,
+                                                            &old_val, &wmap);
+              free_svalue(real_lval, "F_VOID_ASSIGN watched");
+              *real_lval = *sp--;
+              notify_watched_lvalue(wmap, &old_val, real_lval);
               break;
             }
             default: {
@@ -3174,6 +3280,24 @@ void eval_instruction(char *p) {
             sp->subtype = 0;
             sp->u.number = --(*global_lvalue_byte.u.lvalue_byte);
             break;
+          case T_LVALUE_MAPPING_WATCHED: {
+            svalue_t *rl = global_lvalue_mapping_watched.lvalue;
+            if (rl->type == T_NUMBER) {
+              svalue_t ov = *rl;
+              sp->type = T_NUMBER;
+              sp->subtype = 0;
+              sp->u.number = --rl->u.number;
+              mapping_fire_watch(global_lvalue_mapping_watched.map,
+                  &global_lvalue_mapping_watched.key, &ov, rl);
+            } else if (rl->type == T_REAL) {
+              svalue_t ov = *rl;
+              sp->type = T_REAL;
+              sp->u.real = --rl->u.real;
+              mapping_fire_watch(global_lvalue_mapping_watched.map,
+                  &global_lvalue_mapping_watched.key, &ov, rl);
+            } else error("-- of non-numeric argument\n");
+            break;
+          }
           default:
             error("-- of non-numeric argument\n");
         }
@@ -3194,6 +3318,21 @@ void eval_instruction(char *p) {
           case T_LVALUE_CODEPOINT:
             assign_lvalue_codepoint([](UChar32 c) { return c - 1; });
             break;
+          case T_LVALUE_MAPPING_WATCHED: {
+            svalue_t *rl = global_lvalue_mapping_watched.lvalue;
+            if (rl->type == T_NUMBER) {
+              svalue_t ov = *rl;
+              rl->u.number--;
+              mapping_fire_watch(global_lvalue_mapping_watched.map,
+                  &global_lvalue_mapping_watched.key, &ov, rl);
+            } else if (rl->type == T_REAL) {
+              svalue_t ov = *rl;
+              rl->u.real--;
+              mapping_fire_watch(global_lvalue_mapping_watched.map,
+                  &global_lvalue_mapping_watched.key, &ov, rl);
+            } else error("-- of non-numeric argument\n");
+            break;
+          }
           default:
             error("-- of non-numeric argument\n");
         }
@@ -3292,6 +3431,24 @@ void eval_instruction(char *p) {
           case T_LVALUE_CODEPOINT:
             assign_lvalue_codepoint([](UChar32 c) { return ++c; });
             break;
+          case T_LVALUE_MAPPING_WATCHED: {
+            svalue_t *rl = global_lvalue_mapping_watched.lvalue;
+            if (rl->type == T_NUMBER) {
+              svalue_t ov = *rl;
+              sp->type = T_NUMBER;
+              sp->subtype = 0;
+              sp->u.number = ++rl->u.number;
+              mapping_fire_watch(global_lvalue_mapping_watched.map,
+                  &global_lvalue_mapping_watched.key, &ov, rl);
+            } else if (rl->type == T_REAL) {
+              svalue_t ov = *rl;
+              sp->type = T_REAL;
+              sp->u.real = ++rl->u.real;
+              mapping_fire_watch(global_lvalue_mapping_watched.map,
+                  &global_lvalue_mapping_watched.key, &ov, rl);
+            } else error("++ of non-numeric argument\n");
+            break;
+          }
           default:
             error("++ of non-numeric argument\n");
         }
@@ -3626,6 +3783,24 @@ void eval_instruction(char *p) {
           case T_LVALUE_CODEPOINT:
             assign_lvalue_codepoint([](UChar32 c) { return --c; });
             break;
+          case T_LVALUE_MAPPING_WATCHED: {
+            svalue_t *rl = global_lvalue_mapping_watched.lvalue;
+            if (rl->type == T_NUMBER) {
+              svalue_t ov = *rl;
+              sp->type = T_NUMBER;
+              sp->subtype = 0;
+              sp->u.number = rl->u.number--;
+              mapping_fire_watch(global_lvalue_mapping_watched.map,
+                  &global_lvalue_mapping_watched.key, &ov, rl);
+            } else if (rl->type == T_REAL) {
+              svalue_t ov = *rl;
+              sp->type = T_REAL;
+              sp->u.real = rl->u.real--;
+              mapping_fire_watch(global_lvalue_mapping_watched.map,
+                  &global_lvalue_mapping_watched.key, &ov, rl);
+            } else error("-- of non-numeric argument\n");
+            break;
+          }
           default:
             error("-- of non-numeric argument\n");
         }
@@ -3651,6 +3826,24 @@ void eval_instruction(char *p) {
           case T_LVALUE_CODEPOINT:
             assign_lvalue_codepoint([](UChar32 c) { return c++; });
             break;
+          case T_LVALUE_MAPPING_WATCHED: {
+            svalue_t *rl = global_lvalue_mapping_watched.lvalue;
+            if (rl->type == T_NUMBER) {
+              svalue_t ov = *rl;
+              sp->type = T_NUMBER;
+              sp->subtype = 0;
+              sp->u.number = rl->u.number++;
+              mapping_fire_watch(global_lvalue_mapping_watched.map,
+                  &global_lvalue_mapping_watched.key, &ov, rl);
+            } else if (rl->type == T_REAL) {
+              svalue_t ov = *rl;
+              sp->type = T_REAL;
+              sp->u.real = rl->u.real++;
+              mapping_fire_watch(global_lvalue_mapping_watched.map,
+                  &global_lvalue_mapping_watched.key, &ov, rl);
+            } else error("++ of non-numeric argument\n");
+            break;
+          }
           default:
             error("++ of non-numeric argument\n");
         }

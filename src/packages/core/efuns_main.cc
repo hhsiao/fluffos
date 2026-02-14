@@ -896,6 +896,32 @@ void f_map_delete() {
 }
 #endif
 
+#ifdef F_WATCH_MAPPING
+void f_watch_mapping() {
+  mapping_t *m = (sp - 1)->u.map;
+  funptr_t *fp = sp->u.fp;
+  int result = mapping_add_watch(m, fp);
+  free_funp(fp);
+  sp--;
+  free_mapping(m);
+  sp->type = T_NUMBER;
+  sp->subtype = 0;
+  sp->u.number = result;
+}
+#endif
+
+#ifdef F_UNWATCH_MAPPING
+void f_unwatch_mapping() {
+  mapping_t *m = (sp - 1)->u.map;
+  funptr_t *fp = sp->u.fp;
+  mapping_remove_watch(m, fp);
+  free_funp(fp);
+  sp--;
+  free_mapping(m);
+  sp--;
+}
+#endif
+
 #ifdef F_MAPP
 void f_mapp() {
   if (sp->type == T_MAPPING) {

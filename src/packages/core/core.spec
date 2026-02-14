@@ -126,6 +126,8 @@ mapping allocate_mapping(int | mixed *, void | mixed);
 mixed *values(mapping);
 mixed *keys(mapping);
 void map_delete(mapping, mixed);
+int watch_mapping(mapping, function);
+void unwatch_mapping(mapping, function);
 
 mixed match_path(mapping, string);
 

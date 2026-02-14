@@ -6,6 +6,7 @@
 #include "base/package_api.h"
 
 #include "packages/ops/parse.h"
+extern struct global_lvalue_mapping_watched_s global_lvalue_mapping_watched;
 
 void f_and() {
   if (sp->type == T_ARRAY && (sp - 1)->type == T_ARRAY) {
@@ -21,14 +22,19 @@ void f_and() {
 }
 
 void f_and_eq() {
-  svalue_t *argp;
-
-  argp = (sp--)->u.lvalue;
+  svalue_t *argp = (sp--)->u.lvalue;
+  mapping_t *watched_map = nullptr;
+  svalue_t watched_old_val;
+  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
+    watched_map = global_lvalue_mapping_watched.map;
+    argp = global_lvalue_mapping_watched.lvalue;
+    assign_svalue_no_free(&watched_old_val, argp);
+  }
 
   if (argp->type == T_ARRAY && sp->type == T_ARRAY) {
     sp->u.arr = argp->u.arr = intersect_array(argp->u.arr, sp->u.arr);
     sp->u.arr->ref++; /* since we put it in two places */
-    return;
+    goto watch_exit;
   }
   if (argp->type != T_NUMBER) {
     error("Bad left type to &=\n");
@@ -38,10 +44,26 @@ void f_and_eq() {
   }
   sp->u.number = argp->u.number &= sp->u.number;
   sp->subtype = 0;
+
+watch_exit:
+  if (watched_map) {
+    mapping_fire_watch(watched_map,
+                       &global_lvalue_mapping_watched.key,
+                       &watched_old_val, argp);
+    free_svalue(&watched_old_val, "watched op_eq cleanup");
+  }
 }
 
 void f_div_eq() {
   svalue_t *argp = (sp--)->u.lvalue;
+
+  mapping_t *watched_map = nullptr;
+  svalue_t watched_old_val;
+  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
+    watched_map = global_lvalue_mapping_watched.map;
+    argp = global_lvalue_mapping_watched.lvalue;
+    assign_svalue_no_free(&watched_old_val, argp);
+  }
 
   switch (argp->type | sp->type) {
     case T_NUMBER: {
@@ -84,6 +106,13 @@ void f_div_eq() {
         error("Bad left type to /=\n");
       }
     }
+  }
+
+  if (watched_map) {
+    mapping_fire_watch(watched_map,
+                       &global_lvalue_mapping_watched.key,
+                       &watched_old_val, argp);
+    free_svalue(&watched_old_val, "watched op_eq cleanup");
   }
 }
 
@@ -362,8 +391,24 @@ void f_lsh_eq() {
   if ((--sp)->type != T_NUMBER) {
     error("Bad right type to <<=\n");
   }
+
+  mapping_t *watched_map = nullptr;
+  svalue_t watched_old_val;
+  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
+    watched_map = global_lvalue_mapping_watched.map;
+    argp = global_lvalue_mapping_watched.lvalue;
+    assign_svalue_no_free(&watched_old_val, argp);
+  }
+
   sp->u.number = argp->u.number <<= sp->u.number;
   sp->subtype = 0;
+
+  if (watched_map) {
+    mapping_fire_watch(watched_map,
+                       &global_lvalue_mapping_watched.key,
+                       &watched_old_val, argp);
+    free_svalue(&watched_old_val, "watched op_eq cleanup");
+  }
 }
 
 void f_mod_eq() {
@@ -378,12 +423,33 @@ void f_mod_eq() {
   if (sp->u.number == 0) {
     error("Modulo by 0\n");
   }
+  mapping_t *watched_map = nullptr;
+  svalue_t watched_old_val;
+  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
+    watched_map = global_lvalue_mapping_watched.map;
+    argp = global_lvalue_mapping_watched.lvalue;
+    assign_svalue_no_free(&watched_old_val, argp);
+  }
   sp->u.number = argp->u.number %= sp->u.number;
   sp->subtype = 0;
+  if (watched_map) {
+    mapping_fire_watch(watched_map,
+                       &global_lvalue_mapping_watched.key,
+                       &watched_old_val, argp);
+    free_svalue(&watched_old_val, "watched op_eq cleanup");
+  }
 }
 
 void f_mult_eq() {
   svalue_t *argp = (sp--)->u.lvalue;
+
+  mapping_t *watched_map = nullptr;
+  svalue_t watched_old_val;
+  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
+    watched_map = global_lvalue_mapping_watched.map;
+    argp = global_lvalue_mapping_watched.lvalue;
+    assign_svalue_no_free(&watched_old_val, argp);
+  }
 
   switch (argp->type | sp->type) {
     case T_NUMBER: {
@@ -423,6 +489,13 @@ void f_mult_eq() {
         error("Bad left type to *=\n");
       }
     }
+  }
+
+  if (watched_map) {
+    mapping_fire_watch(watched_map,
+                       &global_lvalue_mapping_watched.key,
+                       &watched_old_val, argp);
+    free_svalue(&watched_old_val, "watched op_eq cleanup");
   }
 }
 
@@ -535,10 +608,19 @@ void f_or_eq() {
   svalue_t *argp;
 
   argp = (sp--)->u.lvalue;
+
+  mapping_t *watched_map = nullptr;
+  svalue_t watched_old_val;
+  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
+    watched_map = global_lvalue_mapping_watched.map;
+    argp = global_lvalue_mapping_watched.lvalue;
+    assign_svalue_no_free(&watched_old_val, argp);
+  }
+
   if (argp->type == T_ARRAY && sp->type == T_ARRAY) {
     argp->u.arr = sp->u.arr = union_array(argp->u.arr, sp->u.arr);
     sp->u.arr->ref++; /* because we put it in two places */
-    return;
+    goto watch_exit;
   }
 
   if (argp->type != T_NUMBER) {
@@ -549,6 +631,14 @@ void f_or_eq() {
   }
   sp->u.number = argp->u.number |= sp->u.number;
   sp->subtype = 0;
+
+watch_exit:
+  if (watched_map) {
+    mapping_fire_watch(watched_map,
+                       &global_lvalue_mapping_watched.key,
+                       &watched_old_val, argp);
+    free_svalue(&watched_old_val, "watched op_eq cleanup");
+  }
 }
 
 void f_parse_command() {
@@ -872,12 +962,35 @@ void f_rsh_eq() {
   if ((--sp)->type != T_NUMBER) {
     error("Bad right type to >>=\n");
   }
+
+  mapping_t *watched_map = nullptr;
+  svalue_t watched_old_val;
+  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
+    watched_map = global_lvalue_mapping_watched.map;
+    argp = global_lvalue_mapping_watched.lvalue;
+    assign_svalue_no_free(&watched_old_val, argp);
+  }
+
   sp->u.number = argp->u.number >>= sp->u.number;
   sp->subtype = 0;
+  if (watched_map) {
+    mapping_fire_watch(watched_map,
+                       &global_lvalue_mapping_watched.key,
+                       &watched_old_val, argp);
+    free_svalue(&watched_old_val, "watched op_eq cleanup");
+  }
 }
 
 void f_sub_eq() {
   svalue_t *argp = (sp--)->u.lvalue;
+
+  mapping_t *watched_map = nullptr;
+  svalue_t watched_old_val;
+  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
+    watched_map = global_lvalue_mapping_watched.map;
+    argp = global_lvalue_mapping_watched.lvalue;
+    assign_svalue_no_free(&watched_old_val, argp);
+  }
 
   switch (argp->type | sp->type) {
     case T_NUMBER: {
@@ -928,6 +1041,12 @@ void f_sub_eq() {
         error("Arguments to -= do not match in type.\n");
       }
     }
+  }
+  if (watched_map) {
+    mapping_fire_watch(watched_map,
+                       &global_lvalue_mapping_watched.key,
+                       &watched_old_val, argp);
+    free_svalue(&watched_old_val, "watched op_eq cleanup");
   }
 }
 
@@ -1167,7 +1286,22 @@ void f_xor_eq() {
   if ((--sp)->type != T_NUMBER) {
     error("Bad right type to ^=\n");
   }
+
+  mapping_t *watched_map = nullptr;
+  svalue_t watched_old_val;
+  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
+    watched_map = global_lvalue_mapping_watched.map;
+    argp = global_lvalue_mapping_watched.lvalue;
+    assign_svalue_no_free(&watched_old_val, argp);
+  }
+
   sp->u.number = argp->u.number ^= sp->u.number;
+  if (watched_map) {
+    mapping_fire_watch(watched_map,
+                       &global_lvalue_mapping_watched.key,
+                       &watched_old_val, argp);
+    free_svalue(&watched_old_val, "watched op_eq cleanup");
+  }
 }
 
 void f_function_constructor() {

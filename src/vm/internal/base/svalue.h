@@ -72,6 +72,7 @@ struct ref_t {
 #define T_FREED 0x2000u
 #define T_REF 0x4000u
 #define T_LVALUE_CODEPOINT 0x8000u /* UTF8 codepoint */
+#define T_LVALUE_MAPPING_WATCHED 0x3000u /* mapping element being watched for changes */
 
 #define TYPE_MOD_ARRAY 0x8000u /* Pointer to a basic type */
 /* Note, the following restricts class_num to < 0x40 or 64   */
