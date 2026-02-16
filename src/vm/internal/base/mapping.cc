@@ -503,7 +503,7 @@ void mapping_delete(mapping_t *m, svalue_t *lv) {
     do {
       if (msameval(elt->values, lv)) {
         if (m->watch) {
-            mapping_fire_watch(m, elt->values, elt->values + 1, &const0u);
+            mapping_fire_watch(m, elt->values, 1, elt->values + 1, &const0u);
         }
         if (!(*prev = elt->next) && !m->table[i]) {
           m->unfilled++;
@@ -1281,12 +1281,18 @@ int mapping_add_watch(mapping_t *m, funptr_t *fp) {
         DMALLOC(sizeof(mapping_watch_t), TAG_MAPPING, "mapping_add_watch"));
     if (!m->watch) return 0;
     m->watch->num_callbacks = 0;
+    m->watch->num_parents = 0;
     for (int i = 0; i < MAX_MAPPING_WATCHERS; i++)
       m->watch->callbacks[i] = nullptr;
+    for (int i = 0; i < MAX_MAPPING_PARENTS; i++) {
+      m->watch->parents[i].parent_map = nullptr;
+      m->watch->parents[i].key = const0;
+    }
   }
   if (m->watch->num_callbacks >= MAX_MAPPING_WATCHERS) return 0;
   fp->hdr.ref++;
   m->watch->callbacks[m->watch->num_callbacks++] = fp;
+  mapping_propagate_watch(m);
   return 1;
 }
 
@@ -1300,8 +1306,11 @@ int mapping_remove_watch(mapping_t *m, funptr_t *fp) {
       m->watch->num_callbacks--;
       m->watch->callbacks[m->watch->num_callbacks] = nullptr;
       if (m->watch->num_callbacks == 0) {
-        FREE(m->watch);
-        m->watch = nullptr;
+        mapping_unpropagate_watch(m);
+        if (m->watch->num_parents == 0) {
+          FREE(m->watch);
+          m->watch = nullptr;
+        }
       }
       return 1;
     }
@@ -1309,37 +1318,78 @@ int mapping_remove_watch(mapping_t *m, funptr_t *fp) {
   return 0;
 }
 
-void mapping_fire_watch(mapping_t *m, svalue_t *key,
+void mapping_fire_watch(mapping_t *m, svalue_t *keys_stack, int num_keys,
                         svalue_t *old_val, svalue_t *new_val) {
-  if (!m->watch || m->watch->num_callbacks == 0) return;
+  if (!m->watch) return;
 
-  m->ref++;  /* protect mapping during callbacks */
+  m->ref++;
 
-  /* Build key array: ({ key }) */
-  array_t *keys = allocate_empty_array(1);
-  assign_svalue_no_free(&keys->item[0], key);
-
-  for (int i = 0; i < m->watch->num_callbacks; i++) {
-    funptr_t *fp = m->watch->callbacks[i];
-    if (!fp || !fp->hdr.owner || (fp->hdr.owner->flags & O_DESTRUCTED))
-      continue;
-
-    push_mapping(m);         /* arg 1: mapping (adds ref) */
-    push_refed_array(keys);  /* arg 2: keys array */
-    keys->ref++;             /* extra ref for next iteration */
-    push_svalue(old_val);    /* arg 3: old value */
-    push_svalue(new_val);    /* arg 4: new value */
-    safe_call_function_pointer(fp, 4);
+  /* Manage parent links on sub-mapping values.
+   * Only for direct assignment to this mapping (num_keys == 1). */
+  if (num_keys == 1 && (m->watch->num_callbacks > 0 || m->watch->num_parents > 0)) {
+    if (old_val->type == T_MAPPING && old_val->u.map != nullptr) {
+      mapping_detach_parent(old_val->u.map, m, &keys_stack[0]);
+    }
+    if (new_val->type == T_MAPPING && new_val->u.map != nullptr) {
+      mapping_attach_parent(new_val->u.map, m, &keys_stack[0]);
+    }
   }
 
-  /* Undo the extra ref from the last iteration (or initial if 0 callbacks ran) */
-  free_array(keys);
+  /* Fire direct callbacks on this mapping */
+  if (m->watch->num_callbacks > 0) {
+    array_t *keys = allocate_empty_array(num_keys);
+    for (int k = 0; k < num_keys; k++) {
+      assign_svalue_no_free(&keys->item[k], &keys_stack[k]);
+    }
 
-  free_mapping(m);  /* undo protective ref */
+    for (int i = 0; i < m->watch->num_callbacks; i++) {
+      funptr_t *fp = m->watch->callbacks[i];
+      if (!fp || !fp->hdr.owner || (fp->hdr.owner->flags & O_DESTRUCTED))
+        continue;
+
+      push_mapping(m);
+      push_refed_array(keys);
+      keys->ref++;
+      push_svalue(old_val);
+      push_svalue(new_val);
+      safe_call_function_pointer(fp, 4);
+    }
+
+    free_array(keys);
+  }
+
+  /* Walk up parent chain */
+  for (int p = 0; p < m->watch->num_parents; p++) {
+    mapping_parent_link_t *link = &m->watch->parents[p];
+    if (!link->parent_map || !link->parent_map->watch) continue;
+
+    int total_keys = 1 + num_keys;
+    if (total_keys > MAX_WATCHED_NESTING) total_keys = MAX_WATCHED_NESTING;
+
+    svalue_t extended_keys[MAX_WATCHED_NESTING];
+    assign_svalue_no_free(&extended_keys[0], &link->key);
+    for (int k = 0; k < num_keys && k + 1 < MAX_WATCHED_NESTING; k++) {
+      assign_svalue_no_free(&extended_keys[k + 1], &keys_stack[k]);
+    }
+
+    mapping_fire_watch(link->parent_map, extended_keys, total_keys, old_val, new_val);
+
+    for (int k = 0; k < total_keys; k++) {
+      free_svalue(&extended_keys[k], "mapping_fire_watch: extended keys");
+    }
+  }
+
+  free_mapping(m);
 }
 
 void free_mapping_watch(mapping_t *m) {
   if (!m->watch) return;
+  mapping_unpropagate_watch(m);
+  for (int i = 0; i < m->watch->num_parents; i++) {
+    if (m->watch->parents[i].parent_map) {
+      free_svalue(&m->watch->parents[i].key, "free_mapping_watch: parent key");
+    }
+  }
   for (int i = 0; i < m->watch->num_callbacks; i++) {
     if (m->watch->callbacks[i]) {
       free_funp(m->watch->callbacks[i]);
@@ -1347,4 +1397,78 @@ void free_mapping_watch(mapping_t *m) {
   }
   FREE(m->watch);
   m->watch = nullptr;
+}
+
+static void ensure_watch_struct(mapping_t *m) {
+  if (!m->watch) {
+    m->watch = reinterpret_cast<mapping_watch_t *>(
+        DMALLOC(sizeof(mapping_watch_t), TAG_MAPPING, "ensure_watch_struct"));
+    m->watch->num_callbacks = 0;
+    m->watch->num_parents = 0;
+    for (int i = 0; i < MAX_MAPPING_WATCHERS; i++)
+      m->watch->callbacks[i] = nullptr;
+    for (int i = 0; i < MAX_MAPPING_PARENTS; i++) {
+      m->watch->parents[i].parent_map = nullptr;
+      m->watch->parents[i].key = const0;
+    }
+  }
+}
+
+void mapping_attach_parent(mapping_t *child, mapping_t *parent, svalue_t *key) {
+  ensure_watch_struct(child);
+  for (int i = 0; i < child->watch->num_parents; i++) {
+    if (child->watch->parents[i].parent_map == parent &&
+        sameval(&child->watch->parents[i].key, key)) {
+      return;
+    }
+  }
+  if (child->watch->num_parents >= MAX_MAPPING_PARENTS) return;
+  int idx = child->watch->num_parents++;
+  child->watch->parents[idx].parent_map = parent;
+  assign_svalue_no_free(&child->watch->parents[idx].key, key);
+}
+
+void mapping_detach_parent(mapping_t *child, mapping_t *parent, svalue_t *key) {
+  if (!child->watch) return;
+  for (int i = 0; i < child->watch->num_parents; i++) {
+    if (child->watch->parents[i].parent_map == parent &&
+        (key == nullptr || sameval(&child->watch->parents[i].key, key))) {
+      free_svalue(&child->watch->parents[i].key, "mapping_detach_parent");
+      for (int j = i; j < child->watch->num_parents - 1; j++) {
+        child->watch->parents[j] = child->watch->parents[j + 1];
+      }
+      child->watch->num_parents--;
+      child->watch->parents[child->watch->num_parents].parent_map = nullptr;
+      child->watch->parents[child->watch->num_parents].key = const0;
+      if (child->watch->num_callbacks == 0 && child->watch->num_parents == 0) {
+        FREE(child->watch);
+        child->watch = nullptr;
+      }
+      return;
+    }
+  }
+}
+
+void mapping_propagate_watch(mapping_t *root) {
+  int j = root->table_size;
+  mapping_node_t *elt;
+  do {
+    for (elt = root->table[j]; elt; elt = elt->next) {
+      if (elt->values[1].type == T_MAPPING) {
+        mapping_attach_parent(elt->values[1].u.map, root, &elt->values[0]);
+      }
+    }
+  } while (j--);
+}
+
+void mapping_unpropagate_watch(mapping_t *root) {
+  int j = root->table_size;
+  mapping_node_t *elt;
+  do {
+    for (elt = root->table[j]; elt; elt = elt->next) {
+      if (elt->values[1].type == T_MAPPING) {
+        mapping_detach_parent(elt->values[1].u.map, root, &elt->values[0]);
+      }
+    }
+  } while (j--);
 }

@@ -10,16 +10,29 @@
 // TODO: remove this.
 #define MAX_MAPPING_SIZE CONFIG_INT(__MAX_MAPPING_SIZE__)
 
-#define MAX_MAPPING_WATCHERS 4 /* max # of watchers per mapping element */
+#define MAX_MAPPING_WATCHERS 4 /* max # of direct watchers per mapping */
+#define MAX_MAPPING_PARENTS 4  /* max # of parent watch links per mapping */
+
+/* A parent watch link: "this mapping is watched indirectly via parent_map[key]" */
+typedef struct mapping_parent_link_s {
+  struct mapping_t *parent_map;  /* the parent mapping that has a direct watch */
+  svalue_t key;                   /* the key in parent_map that points to us */
+} mapping_parent_link_t;
+
 typedef struct mapping_watch_s {
   struct funptr_t *callbacks[MAX_MAPPING_WATCHERS];
   int num_callbacks;
+  mapping_parent_link_t parents[MAX_MAPPING_PARENTS];
+  int num_parents;
 } mapping_watch_t;
 
+#define MAX_WATCHED_NESTING 8 /* max depth of nested watched mapping access */
+
 struct global_lvalue_mapping_watched_s {
-  mapping_t *map;
-  svalue_t key;
-  svalue_t *lvalue;
+  mapping_t *map;         /* outermost watched mapping */
+  svalue_t *lvalue;       /* real lvalue (innermost value slot) */
+  svalue_t keys[MAX_WATCHED_NESTING]; /* key stack */
+  int depth;              /* number of keys in the stack (1 for top-level) */
 };
 extern struct global_lvalue_mapping_watched_s global_lvalue_mapping_watched;
 
@@ -127,7 +140,12 @@ void add_mapping_array(mapping_t *, const char *, array_t *);
 void add_mapping_shared_string(mapping_t *, const char *, char *);
 int mapping_add_watch(mapping_t *m, funptr_t *fp);
 int mapping_remove_watch(mapping_t *m, funptr_t *fp);
-void mapping_fire_watch(mapping_t *m, svalue_t *key, svalue_t *old_val, svalue_t *new_val);
+void mapping_fire_watch(mapping_t *m, svalue_t *keys, int num_keys, svalue_t *old_val, svalue_t *new_val);
 void free_mapping_watch(mapping_t *m);
+void reset_watched_mapping_state();
+void mapping_propagate_watch(mapping_t *root);
+void mapping_unpropagate_watch(mapping_t *root);
+void mapping_attach_parent(mapping_t *child, mapping_t *parent, svalue_t *key);
+void mapping_detach_parent(mapping_t *child, mapping_t *parent, svalue_t *key);
 
 #endif /* _MAPPING_H */
