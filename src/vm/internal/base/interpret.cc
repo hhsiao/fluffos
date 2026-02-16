@@ -530,9 +530,25 @@ void pop_stack() {
 
 svalue_t global_lvalue_byte = {T_LVALUE_BYTE};
 
-struct global_lvalue_mapping_watched_s global_lvalue_mapping_watched = {nullptr, {T_NUMBER}, nullptr};
+struct global_lvalue_mapping_watched_s global_lvalue_mapping_watched = {nullptr, nullptr, {{T_NUMBER}}, 0};
 
 static svalue_t global_lvalue_mapping_watched_sv = {T_LVALUE_MAPPING_WATCHED};
+
+/* Free all keys in the watched key stack */
+static inline void free_watched_keys() {
+  for (int i = 0; i < global_lvalue_mapping_watched.depth; i++) {
+    free_svalue(&global_lvalue_mapping_watched.keys[i],
+                "free_watched_keys");
+    global_lvalue_mapping_watched.keys[i] = const0;
+  }
+  global_lvalue_mapping_watched.depth = 0;
+}
+
+/* Reset the entire watched mapping state (callable from ops.cc etc.) */
+void reset_watched_mapping_state() {
+  free_watched_keys();
+  global_lvalue_mapping_watched.map = nullptr;
+}
 
 /*
  * Resolve a watched mapping lvalue.
@@ -559,10 +575,28 @@ static inline void notify_watched_lvalue(mapping_t *map,
                                           svalue_t *old_val,
                                           svalue_t *new_val) {
   if (map) {
-    mapping_fire_watch(map, &global_lvalue_mapping_watched.key,
+    mapping_fire_watch(map, global_lvalue_mapping_watched.keys,
+                       global_lvalue_mapping_watched.depth,
                        old_val, new_val);
     free_svalue(old_val, "notify_watched_lvalue");
+    /* Reset the key stack after firing so stale state doesn't
+     * leak into the next operation. */
+    free_watched_keys();
+    global_lvalue_mapping_watched.map = nullptr;
   }
+}
+
+/* Fire watched mapping callback and reset key stack.
+ * Use for direct fire sites (F_INC, F_DEC, etc.) where old_val
+ * is a stack copy that doesn't need freeing. */
+static inline void fire_watched_and_reset(svalue_t *old_val,
+                                           svalue_t *new_val) {
+  mapping_fire_watch(global_lvalue_mapping_watched.map,
+                     global_lvalue_mapping_watched.keys,
+                     global_lvalue_mapping_watched.depth,
+                     old_val, new_val);
+  free_watched_keys();
+  global_lvalue_mapping_watched.map = nullptr;
 }
 
 int lv_owner_type;
@@ -586,17 +620,33 @@ void push_indexed_lvalue(int reverse) {
 
   if (sp->type == T_LVALUE) {
     lv = sp->u.lvalue;
+        /* If lv is a watched mapping lvalue from a previous indexing step
+         * (e.g. outer["test"] returned a watched lvalue, now we're doing
+         * outer["test"]["best"]), resolve it to the real value so indexing
+         * can continue. The outer watch context is preserved in the key stack. */
+        if (lv->type == T_LVALUE_MAPPING_WATCHED) {
+          lv = global_lvalue_mapping_watched.lvalue;
+        }
         if (!reverse && lv->type == T_MAPPING) {
           mapping_t *thismap = lv->u.map;
           sp--;
           if (!(lv = find_for_insert(thismap, sp, 0))) {
             mapping_too_large();
           }
-          if (thismap->watch) {
-            free_svalue(&global_lvalue_mapping_watched.key,
-                        "push_indexed_lvalue: watched key");
-            assign_svalue_no_free(&global_lvalue_mapping_watched.key, sp);
-            global_lvalue_mapping_watched.map = thismap;
+          if (thismap->watch || global_lvalue_mapping_watched.depth > 0) {
+            /* Either this mapping is directly watched, or we're already
+             * inside a nested access from an outer watched mapping.
+             * Push the key onto the stack. */
+            if (global_lvalue_mapping_watched.depth == 0 && thismap->watch) {
+              /* First level: this mapping is directly watched */
+              global_lvalue_mapping_watched.map = thismap;
+            }
+            /* else: map already set to the outermost watched mapping */
+            int d = global_lvalue_mapping_watched.depth;
+            if (d < MAX_WATCHED_NESTING) {
+              assign_svalue_no_free(&global_lvalue_mapping_watched.keys[d], sp);
+              global_lvalue_mapping_watched.depth = d + 1;
+            }
             global_lvalue_mapping_watched.lvalue = lv;
             free_svalue(sp, "push_indexed_lvalue: 1");
             sp->type = T_LVALUE;
@@ -699,10 +749,14 @@ void push_indexed_lvalue(int reverse) {
           }
           thismap->ref--;
           if (thismap->watch) {
-            free_svalue(&global_lvalue_mapping_watched.key,
-                        "push_indexed_lvalue: watched key 2");
-            assign_svalue_no_free(&global_lvalue_mapping_watched.key, sp - 1);
-            global_lvalue_mapping_watched.map = thismap;
+            if (global_lvalue_mapping_watched.depth == 0) {
+              global_lvalue_mapping_watched.map = thismap;
+            }
+            int d = global_lvalue_mapping_watched.depth;
+            if (d < MAX_WATCHED_NESTING) {
+              assign_svalue_no_free(&global_lvalue_mapping_watched.keys[d], sp - 1);
+              global_lvalue_mapping_watched.depth = d + 1;
+            }
             global_lvalue_mapping_watched.lvalue = lv;
             free_svalue(--sp, "push_indexed_lvalue: 2");
             sp->type = T_LVALUE;
@@ -2117,13 +2171,11 @@ void eval_instruction(char *p) {
             if (rl->type == T_NUMBER) {
               svalue_t ov = *rl;
               rl->u.number++;
-              mapping_fire_watch(global_lvalue_mapping_watched.map,
-                  &global_lvalue_mapping_watched.key, &ov, rl);
+              fire_watched_and_reset(&ov, rl);
             } else if (rl->type == T_REAL) {
               svalue_t ov = *rl;
               rl->u.real++;
-              mapping_fire_watch(global_lvalue_mapping_watched.map,
-                  &global_lvalue_mapping_watched.key, &ov, rl);
+              fire_watched_and_reset(&ov, rl);
             } else error("++ of non-numeric argument\n");
             break;
           }
@@ -2722,9 +2774,7 @@ void eval_instruction(char *p) {
           sp--;
         }
         if (watched_map) {
-        mapping_fire_watch(watched_map,
-                            &global_lvalue_mapping_watched.key,
-                            &watched_old_val, lval);
+        fire_watched_and_reset(&watched_old_val, lval);
         free_svalue(&watched_old_val, "F_ADD_EQ watched");
         }
         break;
@@ -3287,14 +3337,12 @@ void eval_instruction(char *p) {
               sp->type = T_NUMBER;
               sp->subtype = 0;
               sp->u.number = --rl->u.number;
-              mapping_fire_watch(global_lvalue_mapping_watched.map,
-                  &global_lvalue_mapping_watched.key, &ov, rl);
+              fire_watched_and_reset(&ov, rl);
             } else if (rl->type == T_REAL) {
               svalue_t ov = *rl;
               sp->type = T_REAL;
               sp->u.real = --rl->u.real;
-              mapping_fire_watch(global_lvalue_mapping_watched.map,
-                  &global_lvalue_mapping_watched.key, &ov, rl);
+              fire_watched_and_reset(&ov, rl);
             } else error("-- of non-numeric argument\n");
             break;
           }
@@ -3323,13 +3371,11 @@ void eval_instruction(char *p) {
             if (rl->type == T_NUMBER) {
               svalue_t ov = *rl;
               rl->u.number--;
-              mapping_fire_watch(global_lvalue_mapping_watched.map,
-                  &global_lvalue_mapping_watched.key, &ov, rl);
+              fire_watched_and_reset(&ov, rl);
             } else if (rl->type == T_REAL) {
               svalue_t ov = *rl;
               rl->u.real--;
-              mapping_fire_watch(global_lvalue_mapping_watched.map,
-                  &global_lvalue_mapping_watched.key, &ov, rl);
+              fire_watched_and_reset(&ov, rl);
             } else error("-- of non-numeric argument\n");
             break;
           }
@@ -3438,14 +3484,12 @@ void eval_instruction(char *p) {
               sp->type = T_NUMBER;
               sp->subtype = 0;
               sp->u.number = ++rl->u.number;
-              mapping_fire_watch(global_lvalue_mapping_watched.map,
-                  &global_lvalue_mapping_watched.key, &ov, rl);
+              fire_watched_and_reset(&ov, rl);
             } else if (rl->type == T_REAL) {
               svalue_t ov = *rl;
               sp->type = T_REAL;
               sp->u.real = ++rl->u.real;
-              mapping_fire_watch(global_lvalue_mapping_watched.map,
-                  &global_lvalue_mapping_watched.key, &ov, rl);
+              fire_watched_and_reset(&ov, rl);
             } else error("++ of non-numeric argument\n");
             break;
           }
@@ -3790,14 +3834,12 @@ void eval_instruction(char *p) {
               sp->type = T_NUMBER;
               sp->subtype = 0;
               sp->u.number = rl->u.number--;
-              mapping_fire_watch(global_lvalue_mapping_watched.map,
-                  &global_lvalue_mapping_watched.key, &ov, rl);
+              fire_watched_and_reset(&ov, rl);
             } else if (rl->type == T_REAL) {
               svalue_t ov = *rl;
               sp->type = T_REAL;
               sp->u.real = rl->u.real--;
-              mapping_fire_watch(global_lvalue_mapping_watched.map,
-                  &global_lvalue_mapping_watched.key, &ov, rl);
+              fire_watched_and_reset(&ov, rl);
             } else error("-- of non-numeric argument\n");
             break;
           }
@@ -3833,14 +3875,12 @@ void eval_instruction(char *p) {
               sp->type = T_NUMBER;
               sp->subtype = 0;
               sp->u.number = rl->u.number++;
-              mapping_fire_watch(global_lvalue_mapping_watched.map,
-                  &global_lvalue_mapping_watched.key, &ov, rl);
+              fire_watched_and_reset(&ov, rl);
             } else if (rl->type == T_REAL) {
               svalue_t ov = *rl;
               sp->type = T_REAL;
               sp->u.real = rl->u.real++;
-              mapping_fire_watch(global_lvalue_mapping_watched.map,
-                  &global_lvalue_mapping_watched.key, &ov, rl);
+              fire_watched_and_reset(&ov, rl);
             } else error("++ of non-numeric argument\n");
             break;
           }

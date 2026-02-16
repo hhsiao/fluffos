@@ -503,7 +503,7 @@ void mapping_delete(mapping_t *m, svalue_t *lv) {
     do {
       if (msameval(elt->values, lv)) {
         if (m->watch) {
-            mapping_fire_watch(m, elt->values, elt->values + 1, &const0u);
+            mapping_fire_watch(m, elt->values, 1, elt->values + 1, &const0u);
         }
         if (!(*prev = elt->next) && !m->table[i]) {
           m->unfilled++;
@@ -1309,15 +1309,17 @@ int mapping_remove_watch(mapping_t *m, funptr_t *fp) {
   return 0;
 }
 
-void mapping_fire_watch(mapping_t *m, svalue_t *key,
+void mapping_fire_watch(mapping_t *m, svalue_t *keys_stack, int num_keys,
                         svalue_t *old_val, svalue_t *new_val) {
   if (!m->watch || m->watch->num_callbacks == 0) return;
 
   m->ref++;  /* protect mapping during callbacks */
 
-  /* Build key array: ({ key }) */
-  array_t *keys = allocate_empty_array(1);
-  assign_svalue_no_free(&keys->item[0], key);
+  /* Build key array: ({ key1, key2, ... }) from key stack */
+  array_t *keys = allocate_empty_array(num_keys);
+  for (int k = 0; k < num_keys; k++) {
+    assign_svalue_no_free(&keys->item[k], &keys_stack[k]);
+  }
 
   for (int i = 0; i < m->watch->num_callbacks; i++) {
     funptr_t *fp = m->watch->callbacks[i];

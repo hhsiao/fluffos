@@ -7,6 +7,7 @@
 
 #include "packages/ops/parse.h"
 extern struct global_lvalue_mapping_watched_s global_lvalue_mapping_watched;
+extern void reset_watched_mapping_state();
 
 void f_and() {
   if (sp->type == T_ARRAY && (sp - 1)->type == T_ARRAY) {
@@ -47,9 +48,8 @@ void f_and_eq() {
 
 watch_exit:
   if (watched_map) {
-    mapping_fire_watch(watched_map,
-                       &global_lvalue_mapping_watched.key,
-                       &watched_old_val, argp);
+    mapping_fire_watch(watched_map, global_lvalue_mapping_watched.keys, global_lvalue_mapping_watched.depth, &watched_old_val, argp);
+    reset_watched_mapping_state();
     free_svalue(&watched_old_val, "watched op_eq cleanup");
   }
 }
@@ -109,9 +109,8 @@ void f_div_eq() {
   }
 
   if (watched_map) {
-    mapping_fire_watch(watched_map,
-                       &global_lvalue_mapping_watched.key,
-                       &watched_old_val, argp);
+    mapping_fire_watch(watched_map, global_lvalue_mapping_watched.keys, global_lvalue_mapping_watched.depth, &watched_old_val, argp);
+    reset_watched_mapping_state();
     free_svalue(&watched_old_val, "watched op_eq cleanup");
   }
 }
@@ -404,9 +403,8 @@ void f_lsh_eq() {
   sp->subtype = 0;
 
   if (watched_map) {
-    mapping_fire_watch(watched_map,
-                       &global_lvalue_mapping_watched.key,
-                       &watched_old_val, argp);
+    mapping_fire_watch(watched_map, global_lvalue_mapping_watched.keys, global_lvalue_mapping_watched.depth, &watched_old_val, argp);
+    reset_watched_mapping_state();
     free_svalue(&watched_old_val, "watched op_eq cleanup");
   }
 }
@@ -433,9 +431,8 @@ void f_mod_eq() {
   sp->u.number = argp->u.number %= sp->u.number;
   sp->subtype = 0;
   if (watched_map) {
-    mapping_fire_watch(watched_map,
-                       &global_lvalue_mapping_watched.key,
-                       &watched_old_val, argp);
+    mapping_fire_watch(watched_map, global_lvalue_mapping_watched.keys, global_lvalue_mapping_watched.depth, &watched_old_val, argp);
+    reset_watched_mapping_state();
     free_svalue(&watched_old_val, "watched op_eq cleanup");
   }
 }
@@ -492,9 +489,8 @@ void f_mult_eq() {
   }
 
   if (watched_map) {
-    mapping_fire_watch(watched_map,
-                       &global_lvalue_mapping_watched.key,
-                       &watched_old_val, argp);
+    mapping_fire_watch(watched_map, global_lvalue_mapping_watched.keys, global_lvalue_mapping_watched.depth, &watched_old_val, argp);
+    reset_watched_mapping_state();
     free_svalue(&watched_old_val, "watched op_eq cleanup");
   }
 }
@@ -634,9 +630,8 @@ void f_or_eq() {
 
 watch_exit:
   if (watched_map) {
-    mapping_fire_watch(watched_map,
-                       &global_lvalue_mapping_watched.key,
-                       &watched_old_val, argp);
+    mapping_fire_watch(watched_map, global_lvalue_mapping_watched.keys, global_lvalue_mapping_watched.depth, &watched_old_val, argp);
+    reset_watched_mapping_state();
     free_svalue(&watched_old_val, "watched op_eq cleanup");
   }
 }
@@ -974,9 +969,8 @@ void f_rsh_eq() {
   sp->u.number = argp->u.number >>= sp->u.number;
   sp->subtype = 0;
   if (watched_map) {
-    mapping_fire_watch(watched_map,
-                       &global_lvalue_mapping_watched.key,
-                       &watched_old_val, argp);
+    mapping_fire_watch(watched_map, global_lvalue_mapping_watched.keys, global_lvalue_mapping_watched.depth, &watched_old_val, argp);
+    reset_watched_mapping_state();
     free_svalue(&watched_old_val, "watched op_eq cleanup");
   }
 }
@@ -1043,9 +1037,8 @@ void f_sub_eq() {
     }
   }
   if (watched_map) {
-    mapping_fire_watch(watched_map,
-                       &global_lvalue_mapping_watched.key,
-                       &watched_old_val, argp);
+    mapping_fire_watch(watched_map, global_lvalue_mapping_watched.keys, global_lvalue_mapping_watched.depth, &watched_old_val, argp);
+    reset_watched_mapping_state();
     free_svalue(&watched_old_val, "watched op_eq cleanup");
   }
 }
@@ -1297,9 +1290,8 @@ void f_xor_eq() {
 
   sp->u.number = argp->u.number ^= sp->u.number;
   if (watched_map) {
-    mapping_fire_watch(watched_map,
-                       &global_lvalue_mapping_watched.key,
-                       &watched_old_val, argp);
+    mapping_fire_watch(watched_map, global_lvalue_mapping_watched.keys, global_lvalue_mapping_watched.depth, &watched_old_val, argp);
+    reset_watched_mapping_state();
     free_svalue(&watched_old_val, "watched op_eq cleanup");
   }
 }

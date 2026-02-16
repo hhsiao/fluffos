@@ -16,10 +16,13 @@ typedef struct mapping_watch_s {
   int num_callbacks;
 } mapping_watch_t;
 
+#define MAX_WATCHED_NESTING 8 /* max depth of nested watched mapping access */
+
 struct global_lvalue_mapping_watched_s {
-  mapping_t *map;
-  svalue_t key;
-  svalue_t *lvalue;
+  mapping_t *map;         /* outermost watched mapping */
+  svalue_t *lvalue;       /* real lvalue (innermost value slot) */
+  svalue_t keys[MAX_WATCHED_NESTING]; /* key stack: keys[0]="test", keys[1]="best", ... */
+  int depth;              /* number of keys in the stack (1 for top-level) */
 };
 extern struct global_lvalue_mapping_watched_s global_lvalue_mapping_watched;
 
@@ -127,7 +130,8 @@ void add_mapping_array(mapping_t *, const char *, array_t *);
 void add_mapping_shared_string(mapping_t *, const char *, char *);
 int mapping_add_watch(mapping_t *m, funptr_t *fp);
 int mapping_remove_watch(mapping_t *m, funptr_t *fp);
-void mapping_fire_watch(mapping_t *m, svalue_t *key, svalue_t *old_val, svalue_t *new_val);
+void mapping_fire_watch(mapping_t *m, svalue_t *keys, int num_keys, svalue_t *old_val, svalue_t *new_val);
 void free_mapping_watch(mapping_t *m);
+void reset_watched_mapping_state();
 
 #endif /* _MAPPING_H */
