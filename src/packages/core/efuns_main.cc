@@ -871,6 +871,94 @@ void f_lower_case() {
 }
 #endif
 
+#ifdef F_STRIP_ANSI
+/*
+ * strip_ansi(string) - strip ANSI/VT100 escape sequences from a string.
+ *
+ * Handles:
+ *   CSI sequences:  ESC [ <params> <final>    (0x1B 0x5B ...)
+ *   OSC sequences:  ESC ] ... (BEL | ESC \)   (0x1B 0x5D ...)
+ *   2-byte escapes: ESC <final>               (0x1B 0x40-0x5F)
+ *
+ * Single pass, no allocation if no ESC found.
+ */
+void f_strip_ansi() {
+  const char *src = sp->u.string;
+  int len = SVALUE_STRLEN(sp);
+
+  /* Fast path: scan for ESC byte. If none, return unchanged. */
+  const char *esc = static_cast<const char *>(memchr(src, '\x1b', len));
+  if (!esc) return;
+
+  /* There's at least one ESC — need to build a new string.
+   * Allocate worst case (same size), copy non-escape parts. */
+  char *result = new_string(len, "f_strip_ansi");
+  char *dst = result;
+  const char *end = src + len;
+
+  /* Copy everything before the first ESC */
+  memcpy(dst, src, esc - src);
+  dst += esc - src;
+  src = esc;
+
+  while (src < end) {
+    if (*src == '\x1b') {
+      src++;  /* skip ESC */
+      if (src >= end) break;
+
+      if (*src == '[') {
+        /* CSI sequence: ESC [ <parameter bytes 0x30-0x3F>*
+         *               <intermediate bytes 0x20-0x2F>*
+         *               <final byte 0x40-0x7E> */
+        src++;  /* skip '[' */
+        /* Skip parameter bytes */
+        while (src < end && (unsigned char)*src >= 0x30
+                         && (unsigned char)*src <= 0x3F) src++;
+        /* Skip intermediate bytes */
+        while (src < end && (unsigned char)*src >= 0x20
+                         && (unsigned char)*src <= 0x2F) src++;
+        /* Skip final byte */
+        if (src < end && (unsigned char)*src >= 0x40
+                      && (unsigned char)*src <= 0x7E) src++;
+      } else if (*src == ']') {
+        /* OSC sequence: ESC ] ... terminated by BEL or ST (ESC \) */
+        src++;  /* skip ']' */
+        while (src < end) {
+          if (*src == '\x07') {  /* BEL */
+            src++;
+            break;
+          }
+          if (*src == '\x1b' && src + 1 < end && *(src + 1) == '\\') {
+            src += 2;  /* skip ESC \ (ST) */
+            break;
+          }
+          src++;
+        }
+      } else if ((unsigned char)*src >= 0x40 && (unsigned char)*src <= 0x5F) {
+        /* 2-byte escape: ESC + byte in 0x40-0x5F range */
+        src++;
+      }
+      /* else: lone ESC at end or followed by unrecognized byte — skip just ESC */
+    } else {
+      *dst++ = *src++;
+    }
+  }
+
+  *dst = '\0';
+
+  /* Replace the stack string with the stripped version */
+  free_string_svalue(sp);
+  sp->type = T_STRING;
+  sp->subtype = STRING_MALLOC;
+  sp->u.string = result;
+
+  /* Correct the counted string length if needed */
+  if (MSTR_SIZE(result) != (size_t)(dst - result)) {
+    MSTR_UPDATE_SIZE(result, dst - result);
+  }
+}
+#endif
+
 #ifdef F_MALLOC_STATUS
 void f_malloc_status() {
   outbuffer_t ob;
