@@ -96,6 +96,7 @@ void set_this_user set_this_player(object | int);
 
 string lower_case(string);
 string strip_ansi(string);
+int create_zip(string, mapping);
 string replace_string(string, string, string, ...);
 int restore_object(string, void | int);
 mixed save_object(string | int | void, void | int);
@@ -150,6 +151,7 @@ string typeof(mixed);
 
 int bufferp(mixed);
 buffer allocate_buffer(int);
+buffer to_buffer(string);
 
 int inherits(string, object default: F__THIS_OBJECT);
 void replace_program(string);

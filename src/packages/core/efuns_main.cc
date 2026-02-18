@@ -10,6 +10,7 @@
 #include "base/package_api.h"
 
 #include <algorithm>
+#include <zlib.h>
 #ifdef HAVE_SYS_STAT_H
 #include <sys/stat.h>
 #endif
@@ -62,6 +63,22 @@ void f_allocate_buffer() {
     pop_stack();
     push_refed_buffer(buf);
   } else {
+    assign_svalue(sp, &const0);
+  }
+}
+#endif
+
+#ifdef F_TO_BUFFER
+void f_to_buffer() {
+  int len = SVALUE_STRLEN(sp);
+  buffer_t *buf = allocate_buffer(len);
+  if (buf) {
+    memcpy(buf->item, sp->u.string, len);
+    free_string_svalue(sp);
+    sp->type = T_BUFFER;
+    sp->u.buf = buf;
+  } else {
+    free_string_svalue(sp);
     assign_svalue(sp, &const0);
   }
 }
@@ -958,6 +975,330 @@ void f_strip_ansi() {
   }
 }
 #endif
+
+#ifdef F_CREATE_ZIP
+/*
+ * create_zip(string path, mapping entries) - create a ZIP archive on disk.
+ *
+ * Writes a ZIP file directly to 'path'. No LPC buffer size limits.
+ *
+ * Mapping values determine how each entry is sourced:
+ *   string value  -> FILE PATH, read directly from disk
+ *   buffer value  -> RAW DATA, used directly
+ *
+ * Returns: 1 on success, 0 on failure.
+ *
+ * Example:
+ *   create_zip("/www/static/my.zip", ([
+ *       "Images/bg.png"    : "/WuxiaGUI3/bg.png",
+ *       "config.xml"       : to_buffer("<config/>"),
+ *       "Scripts/main.lua" : "/WuxiaGUI3/WuxiaGUI3.lua",
+ *   ]));
+ */
+
+/* ZIP format constants */
+#define ZIP_LOCAL_HEADER_SIG     0x04034b50
+#define ZIP_CENTRAL_HEADER_SIG   0x02014b50
+#define ZIP_END_CENTRAL_SIG      0x06054b50
+#define ZIP_VERSION_MADE_BY      20
+#define ZIP_VERSION_NEEDED       20
+#define ZIP_METHOD_DEFLATE       8
+#define ZIP_GP_FLAG_UTF8         (1 << 11)
+
+static inline void zip_put16(unsigned char *p, uint16_t v) {
+  p[0] = (unsigned char)(v & 0xFF);
+  p[1] = (unsigned char)((v >> 8) & 0xFF);
+}
+
+static inline void zip_put32(unsigned char *p, uint32_t v) {
+  p[0] = (unsigned char)(v & 0xFF);
+  p[1] = (unsigned char)((v >> 8) & 0xFF);
+  p[2] = (unsigned char)((v >> 16) & 0xFF);
+  p[3] = (unsigned char)((v >> 24) & 0xFF);
+}
+
+/* Compress data using raw DEFLATE (no zlib/gzip header) */
+static unsigned char *zip_deflate(const unsigned char *input, uLong input_len,
+                                   uLong *out_len) {
+  z_stream strm;
+  memset(&strm, 0, sizeof(strm));
+
+  if (deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+                   -15, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
+    return nullptr;
+  }
+
+  uLong bound = deflateBound(&strm, input_len);
+  auto *output = reinterpret_cast<unsigned char *>(
+      DMALLOC(bound, TAG_TEMPORARY, "zip_deflate"));
+  if (!output) {
+    deflateEnd(&strm);
+    return nullptr;
+  }
+
+  strm.next_in = const_cast<unsigned char *>(input);
+  strm.avail_in = input_len;
+  strm.next_out = output;
+  strm.avail_out = bound;
+
+  int ret = deflate(&strm, Z_FINISH);
+  deflateEnd(&strm);
+
+  if (ret != Z_STREAM_END) {
+    FREE(output);
+    return nullptr;
+  }
+
+  *out_len = strm.total_out;
+  return output;
+}
+
+/* Read an entire file from disk. Bypasses LPC transfer limits. */
+static unsigned char *zip_read_file(const char *path, uLong *out_len) {
+  const char *real_path = check_valid_path(path, current_object, "create_zip", 0);
+  if (!real_path) return nullptr;
+
+  FILE *fp = fopen(real_path, "rb");
+  if (!fp) return nullptr;
+
+  struct stat st;
+  if (fstat(fileno(fp), &st) == -1) {
+    fclose(fp);
+    return nullptr;
+  }
+
+  uLong size = st.st_size;
+  auto *buf = reinterpret_cast<unsigned char *>(
+      DMALLOC(size > 0 ? size : 1, TAG_TEMPORARY, "zip_read_file"));
+  if (!buf) {
+    fclose(fp);
+    return nullptr;
+  }
+
+  if (size > 0) {
+    uLong total_read = 0;
+    while (total_read < size) {
+      size_t n = fread(buf + total_read, 1, size - total_read, fp);
+      if (n == 0) break;
+      total_read += n;
+    }
+    if (total_read != size) {
+      fclose(fp);
+      FREE(buf);
+      return nullptr;
+    }
+  }
+  fclose(fp);
+
+  *out_len = size;
+  return buf;
+}
+
+struct zip_entry_info {
+  const char *name;
+  uint16_t name_len;
+  uint32_t crc32;
+  uint32_t compressed_size;
+  uint32_t uncompressed_size;
+  uint32_t local_header_offset;
+  uint16_t method;
+  unsigned char *data;
+  int data_owned;
+};
+
+void f_create_zip() {
+  int const num_arg = st_num_arg;
+  const char *output_path;
+  mapping_t *m;
+
+  if ((sp - 1)->type != T_STRING || sp->type != T_MAPPING) {
+    pop_n_elems(num_arg);
+    push_number(0);
+    return;
+  }
+
+  output_path = (sp - 1)->u.string;
+  m = sp->u.map;
+  int count = MAP_COUNT(m);
+
+  if (count == 0) {
+    pop_n_elems(num_arg);
+    push_number(0);
+    return;
+  }
+
+  /* Validate output path */
+  const char *real_output = check_valid_path(output_path, current_object, "create_zip", 1);
+  if (!real_output) {
+    pop_n_elems(num_arg);
+    push_number(0);
+    return;
+  }
+
+  auto *entries = reinterpret_cast<zip_entry_info *>(
+      DCALLOC(count, sizeof(zip_entry_info), TAG_TEMPORARY, "create_zip:entries"));
+
+  int num_entries = 0;
+  int had_error = 0;
+
+  /* Phase 1: read and compress all entries */
+  int j = m->table_size;
+  mapping_node_t *elt;
+  do {
+    for (elt = m->table[j]; elt; elt = elt->next) {
+      svalue_t *key = &elt->values[0];
+      svalue_t *val = &elt->values[1];
+
+      if (key->type != T_STRING) continue;
+
+      const unsigned char *raw_data = nullptr;
+      uLong raw_len = 0;
+      unsigned char *file_buf = nullptr;
+
+      if (val->type == T_STRING) {
+        file_buf = zip_read_file(val->u.string, &raw_len);
+        if (!file_buf) {
+          had_error = 1;
+          break;
+        }
+        raw_data = file_buf;
+      } else if (val->type == T_BUFFER) {
+        raw_data = val->u.buf->item;
+        raw_len = val->u.buf->size;
+      } else {
+        continue;
+      }
+
+      int idx = num_entries;
+      entries[idx].name = key->u.string;
+      entries[idx].name_len = strlen(key->u.string);
+      entries[idx].crc32 = crc32(0, raw_data, raw_len);
+      entries[idx].uncompressed_size = raw_len;
+
+      uLong comp_len = 0;
+      unsigned char *comp = nullptr;
+
+      if (raw_len > 0) {
+        comp = zip_deflate(raw_data, raw_len, &comp_len);
+      }
+
+      if (comp && comp_len < raw_len) {
+        entries[idx].method = ZIP_METHOD_DEFLATE;
+        entries[idx].compressed_size = comp_len;
+        entries[idx].data = comp;
+        entries[idx].data_owned = 1;
+        if (file_buf) FREE(file_buf);
+      } else {
+        if (comp) FREE(comp);
+        entries[idx].method = 0;
+        entries[idx].compressed_size = raw_len;
+        if (file_buf) {
+          entries[idx].data = file_buf;
+          entries[idx].data_owned = 1;
+        } else {
+          entries[idx].data = const_cast<unsigned char *>(raw_data);
+          entries[idx].data_owned = 0;
+        }
+      }
+
+      num_entries++;
+    }
+    if (had_error) break;
+  } while (j--);
+
+  if (had_error || num_entries == 0) {
+    for (int i = 0; i < num_entries; i++) {
+      if (entries[i].data_owned && entries[i].data) FREE(entries[i].data);
+    }
+    FREE(entries);
+    pop_n_elems(num_arg);
+    push_number(0);
+    return;
+  }
+
+  /* Phase 2: write ZIP to disk */
+  FILE *fp = fopen(real_output, "wb");
+  if (!fp) {
+    for (int i = 0; i < num_entries; i++) {
+      if (entries[i].data_owned && entries[i].data) FREE(entries[i].data);
+    }
+    FREE(entries);
+    pop_n_elems(num_arg);
+    push_number(0);
+    return;
+  }
+
+  unsigned char hdr[46];  /* reusable header buffer (46 = central dir size) */
+  uint32_t *offsets = reinterpret_cast<uint32_t *>(
+      DCALLOC(num_entries, sizeof(uint32_t), TAG_TEMPORARY, "create_zip:offsets"));
+  uint32_t offset = 0;
+
+  /* Write local file headers + data */
+  for (int i = 0; i < num_entries; i++) {
+    offsets[i] = offset;
+
+    memset(hdr, 0, 30);
+    zip_put32(hdr, ZIP_LOCAL_HEADER_SIG);
+    zip_put16(hdr + 4, ZIP_VERSION_NEEDED);
+    zip_put16(hdr + 6, ZIP_GP_FLAG_UTF8);
+    zip_put16(hdr + 8, entries[i].method);
+    zip_put32(hdr + 14, entries[i].crc32);
+    zip_put32(hdr + 18, entries[i].compressed_size);
+    zip_put32(hdr + 22, entries[i].uncompressed_size);
+    zip_put16(hdr + 26, entries[i].name_len);
+    fwrite(hdr, 1, 30, fp);
+    fwrite(entries[i].name, 1, entries[i].name_len, fp);
+    if (entries[i].data && entries[i].compressed_size > 0) {
+      fwrite(entries[i].data, 1, entries[i].compressed_size, fp);
+    }
+    offset += 30 + entries[i].name_len + entries[i].compressed_size;
+  }
+
+  /* Write central directory */
+  uint32_t central_dir_offset = offset;
+  uint32_t central_dir_size = 0;
+
+  for (int i = 0; i < num_entries; i++) {
+    memset(hdr, 0, 46);
+    zip_put32(hdr, ZIP_CENTRAL_HEADER_SIG);
+    zip_put16(hdr + 4, ZIP_VERSION_MADE_BY);
+    zip_put16(hdr + 6, ZIP_VERSION_NEEDED);
+    zip_put16(hdr + 8, ZIP_GP_FLAG_UTF8);
+    zip_put16(hdr + 10, entries[i].method);
+    zip_put32(hdr + 16, entries[i].crc32);
+    zip_put32(hdr + 20, entries[i].compressed_size);
+    zip_put32(hdr + 24, entries[i].uncompressed_size);
+    zip_put16(hdr + 28, entries[i].name_len);
+    zip_put32(hdr + 42, offsets[i]);
+    fwrite(hdr, 1, 46, fp);
+    fwrite(entries[i].name, 1, entries[i].name_len, fp);
+    central_dir_size += 46 + entries[i].name_len;
+  }
+
+  /* Write end of central directory */
+  memset(hdr, 0, 22);
+  zip_put32(hdr, ZIP_END_CENTRAL_SIG);
+  zip_put16(hdr + 8, num_entries);
+  zip_put16(hdr + 10, num_entries);
+  zip_put32(hdr + 12, central_dir_size);
+  zip_put32(hdr + 16, central_dir_offset);
+  fwrite(hdr, 1, 22, fp);
+
+  fclose(fp);
+
+  /* Clean up */
+  for (int i = 0; i < num_entries; i++) {
+    if (entries[i].data_owned && entries[i].data) FREE(entries[i].data);
+  }
+  FREE(offsets);
+  FREE(entries);
+
+  pop_n_elems(num_arg);
+  push_number(1);
+}
+#endif
+
+
 
 #ifdef F_MALLOC_STATUS
 void f_malloc_status() {
