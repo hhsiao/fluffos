@@ -172,7 +172,7 @@ switch (sv->type) {
         yyjson_mut_val* json_obj = yyjson_mut_obj(doc);
         char num_buf[32];
         int obj_count = 0;
-        for (int i = 0; i < map->table_size; i++) {
+        for (int i = 0; i <= map->table_size; i++) {
             for (mapping_node_t *elt = map->table[i]; elt; elt = elt->next) {
                 if (UNLIKELY(++obj_count > MAX_JSON_OBJECT_SIZE)) {
                     debug_message("json_encode: object size exceeds limit %d, truncating\n",
