@@ -10,6 +10,7 @@
 #include "base/package_api.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <zlib.h>
 #ifdef HAVE_SYS_STAT_H
 #include <sys/stat.h>
@@ -1112,6 +1113,8 @@ void f_create_zip() {
   mapping_t *m;
 
   if ((sp - 1)->type != T_STRING || sp->type != T_MAPPING) {
+    debug(d_flag, "create_zip: bad arguments (need string, mapping), got types %d, %d\n",
+                  (sp - 1)->type, sp->type);
     pop_n_elems(num_arg);
     push_number(0);
     return;
@@ -1122,18 +1125,22 @@ void f_create_zip() {
   int count = MAP_COUNT(m);
 
   if (count == 0) {
+    debug(d_flag, "create_zip: mapping is empty\n");
     pop_n_elems(num_arg);
     push_number(0);
     return;
   }
 
-  /* Validate output path */
-  const char *real_output = check_valid_path(output_path, current_object, "create_zip", 1);
-  if (!real_output) {
+  /* Validate output path — must copy since check_valid_path returns a pointer
+   * into apply_ret_value which gets overwritten by subsequent calls. */
+  const char *tmp_output = check_valid_path(output_path, current_object, "create_zip", 1);
+  if (!tmp_output) {
+    debug(d_flag, "create_zip: check_valid_path failed for output '%s'\n", output_path);
     pop_n_elems(num_arg);
     push_number(0);
     return;
   }
+  char *real_output = string_copy(tmp_output, "create_zip:output_path");
 
   auto *entries = reinterpret_cast<zip_entry_info *>(
       DCALLOC(count, sizeof(zip_entry_info), TAG_TEMPORARY, "create_zip:entries"));
@@ -1149,7 +1156,10 @@ void f_create_zip() {
       svalue_t *key = &elt->values[0];
       svalue_t *val = &elt->values[1];
 
-      if (key->type != T_STRING) continue;
+      if (key->type != T_STRING) {
+        debug(d_flag, "create_zip: skipping non-string key (type %d)\n", key->type);
+        continue;
+      }
 
       const unsigned char *raw_data = nullptr;
       uLong raw_len = 0;
@@ -1158,6 +1168,8 @@ void f_create_zip() {
       if (val->type == T_STRING) {
         file_buf = zip_read_file(val->u.string, &raw_len);
         if (!file_buf) {
+          debug(d_flag, "create_zip: failed to read file '%s' for entry '%s'\n",
+                        val->u.string, key->u.string);
           had_error = 1;
           break;
         }
@@ -1166,6 +1178,8 @@ void f_create_zip() {
         raw_data = val->u.buf->item;
         raw_len = val->u.buf->size;
       } else {
+        debug(d_flag, "create_zip: skipping entry '%s' with unsupported value type %d\n",
+                      key->u.string, val->type);
         continue;
       }
 
@@ -1201,16 +1215,24 @@ void f_create_zip() {
         }
       }
 
+      debug(d_flag, "create_zip: entry '%s' %s %u -> %u bytes\n",
+                    entries[idx].name,
+                    entries[idx].method == ZIP_METHOD_DEFLATE ? "DEFLATE" : "STORED",
+                    entries[idx].uncompressed_size,
+                    entries[idx].compressed_size);
+
       num_entries++;
     }
     if (had_error) break;
   } while (j--);
 
   if (had_error || num_entries == 0) {
+    debug(d_flag, "create_zip: aborting — had_error=%d num_entries=%d\n", had_error, num_entries);
     for (int i = 0; i < num_entries; i++) {
       if (entries[i].data_owned && entries[i].data) FREE(entries[i].data);
     }
     FREE(entries);
+    FREE_MSTR(real_output);
     pop_n_elems(num_arg);
     push_number(0);
     return;
@@ -1219,10 +1241,12 @@ void f_create_zip() {
   /* Phase 2: write ZIP to disk */
   FILE *fp = fopen(real_output, "wb");
   if (!fp) {
+    debug(d_flag, "create_zip: fopen failed for '%s': %s\n", real_output, strerror(errno));
     for (int i = 0; i < num_entries; i++) {
       if (entries[i].data_owned && entries[i].data) FREE(entries[i].data);
     }
     FREE(entries);
+    FREE_MSTR(real_output);
     pop_n_elems(num_arg);
     push_number(0);
     return;
@@ -1292,6 +1316,7 @@ void f_create_zip() {
   }
   FREE(offsets);
   FREE(entries);
+  FREE_MSTR(real_output);
 
   pop_n_elems(num_arg);
   push_number(1);

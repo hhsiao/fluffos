@@ -31,6 +31,10 @@ static const struct lws_extension extensions[] = {
      "; client_max_window_bits"},
     {NULL, NULL, NULL /* terminator */}};
 
+static const struct lws_protocol_vhost_options extra_mimetypes = {
+    nullptr, nullptr, ".mpackage", "application/octet-stream"
+};
+
 // modified on create.
 static struct lws_http_mount mount = {
     /* .mount_next */ nullptr, /* linked-list "next" */
@@ -39,7 +43,7 @@ static struct lws_http_mount mount = {
     /* .def */ "index.html",   /* default filename */
     /* .protocol */ nullptr,
     /* .cgienv */ nullptr,
-    /* .extra_mimetypes */ nullptr,
+    /* .extra_mimetypes */ &extra_mimetypes,
     /* .interpret */ nullptr,
     /* .cgi_timeout */ 0,
     /* .cache_max_age */ 0,
