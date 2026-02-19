@@ -10,7 +10,7 @@ title: pcre / pcre_match_all
 
 ### SYNOPSIS
 
-    mixed pcre_match_all(string input, string pattern, void|int pcre_flags);
+    mixed pcre_match_all(string input, string pattern);
 
 ### DESCRIPTION
 
@@ -18,10 +18,9 @@ title: pcre / pcre_match_all
     containing all matches and captured groups.
 
 ### Example
-
     // https://tools.ietf.org/html/rfc3986#appendix-B
     pcre_match_all("http://www.ics.uci.edu/pub/ietf/uri/#Related",
-                       "^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\\?([^#]*))?(#(.*))?" , PCRE_M));
+                       "^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\\?([^#]*))?(#(.*))?" ));
 
     Will return
       ({ /* sizeof() == 1 */
