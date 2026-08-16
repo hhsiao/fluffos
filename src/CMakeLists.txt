@@ -274,7 +274,10 @@ if (NOT EMSCRIPTEN)
 endif ()
 
 set(ICU_DEBUG ON)
-find_package(ICU REQUIRED COMPONENTS uc dt i18n)
+# i18n must precede uc/dt: with static ICU (MSYS2, wasm) the linker resolves
+# libicui18n's references into libicuuc/libicudata in a single left-to-right
+# pass, so listing uc/dt first leaves those symbols undefined.
+find_package(ICU REQUIRED COMPONENTS i18n uc dt)
 # Make ICU use utf-8 internally
 add_compile_options("-DU_CHARSET_IS_UTF8=1")
 if(STATIC)
@@ -748,7 +751,8 @@ endif ()
 if (NOT EMSCRIPTEN)
   target_link_libraries(libdriver PUBLIC OpenSSL::SSL)
 endif ()
-target_link_libraries(libdriver PUBLIC ${ICU_LIBRARIES})
+# Explicit component order (i18n -> uc -> dt); see the find_package(ICU) note.
+target_link_libraries(libdriver PUBLIC ICU::i18n ICU::uc ICU::dt)
 
 # Platform Libraries
 

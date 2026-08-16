@@ -11,7 +11,9 @@
 
 #include <algorithm>
 #include <cerrno>
+#ifdef HAVE_ZLIB
 #include <zlib.h>
+#endif
 #ifdef HAVE_SYS_STAT_H
 #include <sys/stat.h>
 #endif
@@ -68,22 +70,6 @@ void f_allocate_buffer() {
     pop_stack();
     push_refed_buffer(buf);
   } else {
-    assign_svalue(sp, &const0);
-  }
-}
-#endif
-
-#ifdef F_TO_BUFFER
-void f_to_buffer() {
-  int len = SVALUE_STRLEN(sp);
-  buffer_t *buf = allocate_buffer(len);
-  if (buf) {
-    memcpy(buf->item, sp->u.string, len);
-    free_string_svalue(sp);
-    sp->type = T_BUFFER;
-    sp->u.buf = buf;
-  } else {
-    free_string_svalue(sp);
     assign_svalue(sp, &const0);
   }
 }
@@ -990,7 +976,13 @@ void f_strip_ansi() {
 }
 #endif
 
-#ifdef F_CREATE_ZIP
+#if defined(F_CREATE_ZIP) && !defined(HAVE_ZLIB)
+/* No zlib in this build (e.g. the WASM target): keep the efun defined so the
+ * dispatch table links, but fail cleanly at runtime. */
+void f_create_zip() { error("create_zip: zlib support not available in this build.\n"); }
+#endif
+
+#if defined(F_CREATE_ZIP) && defined(HAVE_ZLIB)
 /*
  * create_zip(string path, mapping entries) - create a ZIP archive on disk.
  *

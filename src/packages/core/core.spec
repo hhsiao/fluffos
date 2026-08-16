@@ -154,7 +154,6 @@ string typeof(mixed);
 
 int bufferp(mixed);
 buffer allocate_buffer(int);
-buffer to_buffer(string);
 
 int inherits(string, object default: F__THIS_OBJECT);
 void replace_program(string);
