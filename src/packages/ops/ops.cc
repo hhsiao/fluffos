@@ -400,20 +400,23 @@ void f_lsh() {
 }
 
 void f_lsh_eq() {
-  svalue_t* argp;
+  // Resolve the watched-mapping sentinel before the type checks (see f_xor_eq).
+  svalue_t* argp = sp->u.lvalue;
+  mapping_t* watched_map = nullptr;
+  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
+    watched_map = global_lvalue_mapping_watched.map;
+    argp = global_lvalue_mapping_watched.lvalue;
+  }
 
-  if ((argp = sp->u.lvalue)->type != T_NUMBER) {
+  if (argp->type != T_NUMBER) {
     error("Bad left type to <<=\n");
   }
   if ((--sp)->type != T_NUMBER) {
     error("Bad right type to <<=\n");
   }
 
-  mapping_t *watched_map = nullptr;
   svalue_t watched_old_val;
-  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
-    watched_map = global_lvalue_mapping_watched.map;
-    argp = global_lvalue_mapping_watched.lvalue;
+  if (watched_map) {
     assign_svalue_no_free(&watched_old_val, argp);
   }
 
@@ -429,9 +432,15 @@ void f_lsh_eq() {
 }
 
 void f_mod_eq() {
-  svalue_t* argp;
+  // Resolve the watched-mapping sentinel before the type checks (see f_xor_eq).
+  svalue_t* argp = sp->u.lvalue;
+  mapping_t* watched_map = nullptr;
+  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
+    watched_map = global_lvalue_mapping_watched.map;
+    argp = global_lvalue_mapping_watched.lvalue;
+  }
 
-  if ((argp = sp->u.lvalue)->type != T_NUMBER) {
+  if (argp->type != T_NUMBER) {
     error("Bad left type to %%=\n");
   }
   if ((--sp)->type != T_NUMBER) {
@@ -440,11 +449,9 @@ void f_mod_eq() {
   if (sp->u.number == 0) {
     error("Modulo by 0\n");
   }
-  mapping_t *watched_map = nullptr;
+
   svalue_t watched_old_val;
-  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
-    watched_map = global_lvalue_mapping_watched.map;
-    argp = global_lvalue_mapping_watched.lvalue;
+  if (watched_map) {
     assign_svalue_no_free(&watched_old_val, argp);
   }
   if (sp->u.number == -1) {
@@ -987,20 +994,23 @@ void f_rsh() {
 }
 
 void f_rsh_eq() {
-  svalue_t* argp;
+  // Resolve the watched-mapping sentinel before the type checks (see f_xor_eq).
+  svalue_t* argp = sp->u.lvalue;
+  mapping_t* watched_map = nullptr;
+  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
+    watched_map = global_lvalue_mapping_watched.map;
+    argp = global_lvalue_mapping_watched.lvalue;
+  }
 
-  if ((argp = sp->u.lvalue)->type != T_NUMBER) {
+  if (argp->type != T_NUMBER) {
     error("Bad left type to >>=\n");
   }
   if ((--sp)->type != T_NUMBER) {
     error("Bad right type to >>=\n");
   }
 
-  mapping_t *watched_map = nullptr;
   svalue_t watched_old_val;
-  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
-    watched_map = global_lvalue_mapping_watched.map;
-    argp = global_lvalue_mapping_watched.lvalue;
+  if (watched_map) {
     assign_svalue_no_free(&watched_old_val, argp);
   }
 
@@ -1325,20 +1335,28 @@ void f_xor() {
 }
 
 void f_xor_eq() {
-  svalue_t* argp;
+  // Resolve the watched-mapping element sentinel to the real lvalue BEFORE the
+  // type checks: on a watch_mapping()'d mapping, m[k] yields a
+  // T_LVALUE_MAPPING_WATCHED sentinel whose type is not T_NUMBER, so checking
+  // sp->u.lvalue->type first would spuriously throw "Bad left type" on every
+  // watched use (and, since arming happens in push_indexed_lvalue, leave the
+  // shared watch state dangling). Matches f_and_eq/f_or_eq.
+  svalue_t* argp = sp->u.lvalue;
+  mapping_t* watched_map = nullptr;
+  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
+    watched_map = global_lvalue_mapping_watched.map;
+    argp = global_lvalue_mapping_watched.lvalue;
+  }
 
-  if ((argp = sp->u.lvalue)->type != T_NUMBER) {
+  if (argp->type != T_NUMBER) {
     error("Bad left type to ^=\n");
   }
   if ((--sp)->type != T_NUMBER) {
     error("Bad right type to ^=\n");
   }
 
-  mapping_t *watched_map = nullptr;
   svalue_t watched_old_val;
-  if (argp->type == T_LVALUE_MAPPING_WATCHED) {
-    watched_map = global_lvalue_mapping_watched.map;
-    argp = global_lvalue_mapping_watched.lvalue;
+  if (watched_map) {
     assign_svalue_no_free(&watched_old_val, argp);
   }
 

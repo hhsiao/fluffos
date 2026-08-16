@@ -5836,4 +5836,13 @@ void restore_context(error_context_t* econ) {
       refp = refp->next;
     }
   }
+
+  // A watched-mapping element lvalue (m[k] on a watch_mapping()'d mapping)
+  // arms the shared global_lvalue_mapping_watched scratch in
+  // push_indexed_lvalue and is consumed (and reset) by the assign/compound-op
+  // opcode. If an error() throws in between -- e.g. a bad rhs to a compound
+  // assignment -- that reset is skipped, leaving the global armed with a
+  // dangling map pointer and leaked key refs that corrupt (and can crash) the
+  // next watched operation. Clear it here so no error site can leave it armed.
+  reset_watched_mapping_state();
 }
