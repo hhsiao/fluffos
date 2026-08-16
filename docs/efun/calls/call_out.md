@@ -1,5 +1,4 @@
 ---
-layout: doc
 title: calls / call_out
 ---
 # call_out
@@ -42,7 +41,10 @@ title: calls / call_out
     above problem.
 
     The return value is an integer representing the handle of the call_out
-    which may be used as an argument to remove_call_out().
+    which may be used as an argument to remove_call_out() or
+    find_call_out(). The handle remains valid until the call_out fires or
+    is removed, regardless of how many newer call_outs are scheduled after
+    it. Handles are always positive; 0 is never a valid handle.
 
 ### SEE ALSO
 

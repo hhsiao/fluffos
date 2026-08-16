@@ -44,6 +44,7 @@ void f_and_eq() {
     error("Bad right type to &=\n");
   }
   sp->u.number = argp->u.number &= sp->u.number;
+  argp->subtype = 0;
   sp->subtype = 0;
 
 watch_exit:
@@ -55,7 +56,7 @@ watch_exit:
 }
 
 void f_div_eq() {
-  svalue_t *argp = (sp--)->u.lvalue;
+  svalue_t* argp = (sp--)->u.lvalue;
 
   mapping_t *watched_map = nullptr;
   svalue_t watched_old_val;
@@ -70,7 +71,14 @@ void f_div_eq() {
       if (!sp->u.number) {
         error("Division by 0nn\n");
       }
-      sp->u.number = argp->u.number /= sp->u.number;
+      if (sp->u.number == -1) {
+        // x / -1 == -x; direct division traps (SIGFPE) for INT_MIN.
+        argp->u.number = (LPC_INT)(0ULL - (uint64_t)argp->u.number);
+      } else {
+        argp->u.number /= sp->u.number;
+      }
+      argp->subtype = 0;
+      sp->u.number = argp->u.number;
       sp->subtype = 0;
       break;
     }
@@ -94,7 +102,11 @@ void f_div_eq() {
         if (sp->u.real == 0.0) {
           error("Division by 0nr\n");
         }
-        sp->u.real = argp->u.number /= sp->u.real;
+        /* Untyped lvalue (mixed/mapping value): promote to float. See the
+         * T_NUMBER case of F_ADD_EQ in interpret.cc for the full rationale. */
+        argp->type = T_REAL;
+        argp->u.real = argp->u.number / sp->u.real;
+        sp->u.real = argp->u.real;
       }
       break;
     }
@@ -377,12 +389,18 @@ void f_lt() {
 void f_lsh() {
   CHECK_TYPES((sp - 1), T_NUMBER, 1, F_LSH);
   CHECK_TYPES(sp, T_NUMBER, 2, F_LSH);
+  // A raw negative or >=64 (LPC_INT is int64_t) shift count is undefined
+  // behavior for '<<'. Mask to the low 6 bits (mod 64) instead of
+  // erroring -- matches Java's `long` shift semantics (JLS 15.19) and
+  // guarantees the count handed to '<<=' below is always in [0, 64).
+  LPC_INT count = sp->u.number & 63;
   sp--;
-  sp->u.number <<= (sp + 1)->u.number;
+  sp->u.number <<= count;
+  sp->subtype = 0;
 }
 
 void f_lsh_eq() {
-  svalue_t *argp;
+  svalue_t* argp;
 
   if ((argp = sp->u.lvalue)->type != T_NUMBER) {
     error("Bad left type to <<=\n");
@@ -399,7 +417,8 @@ void f_lsh_eq() {
     assign_svalue_no_free(&watched_old_val, argp);
   }
 
-  sp->u.number = argp->u.number <<= sp->u.number;
+  sp->u.number = argp->u.number <<= (sp->u.number & 63);
+  argp->subtype = 0;
   sp->subtype = 0;
 
   if (watched_map) {
@@ -410,7 +429,7 @@ void f_lsh_eq() {
 }
 
 void f_mod_eq() {
-  svalue_t *argp;
+  svalue_t* argp;
 
   if ((argp = sp->u.lvalue)->type != T_NUMBER) {
     error("Bad left type to %%=\n");
@@ -428,7 +447,13 @@ void f_mod_eq() {
     argp = global_lvalue_mapping_watched.lvalue;
     assign_svalue_no_free(&watched_old_val, argp);
   }
-  sp->u.number = argp->u.number %= sp->u.number;
+  if (sp->u.number == -1) {
+    argp->u.number = 0;  // x % -1 == 0; direct computation traps for INT_MIN.
+  } else {
+    argp->u.number %= sp->u.number;
+  }
+  argp->subtype = 0;
+  sp->u.number = argp->u.number;
   sp->subtype = 0;
   if (watched_map) {
     mapping_fire_watch(watched_map, global_lvalue_mapping_watched.keys, global_lvalue_mapping_watched.depth, &watched_old_val, argp);
@@ -438,7 +463,7 @@ void f_mod_eq() {
 }
 
 void f_mult_eq() {
-  svalue_t *argp = (sp--)->u.lvalue;
+  svalue_t* argp = (sp--)->u.lvalue;
 
   mapping_t *watched_map = nullptr;
   svalue_t watched_old_val;
@@ -451,6 +476,7 @@ void f_mult_eq() {
   switch (argp->type | sp->type) {
     case T_NUMBER: {
       sp->u.number = argp->u.number *= sp->u.number;
+      argp->subtype = 0;
       sp->subtype = 0;
       break;
     }
@@ -465,13 +491,17 @@ void f_mult_eq() {
         sp->type = T_REAL;
         sp->u.real = argp->u.real *= sp->u.number;
       } else {
-        sp->u.real = argp->u.number *= sp->u.real;
+        /* Untyped lvalue (mixed/mapping value): promote to float. See the
+         * T_NUMBER case of F_ADD_EQ in interpret.cc for the full rationale. */
+        argp->type = T_REAL;
+        argp->u.real = argp->u.number * sp->u.real;
+        sp->u.real = argp->u.real;
       }
       break;
     }
 
     case T_MAPPING: {
-      mapping_t *m = compose_mapping(argp->u.map, sp->u.map, 0);
+      mapping_t* m = compose_mapping(argp->u.map, sp->u.map, 0);
       if (argp->u.map != sp->u.map) {
         pop_stack();
         push_mapping(m);
@@ -598,10 +628,11 @@ void f_or() {
   CHECK_TYPES(sp, T_NUMBER, 2, F_OR);
   sp--;
   sp->u.number |= (sp + 1)->u.number;
+  sp->subtype = 0;
 }
 
 void f_or_eq() {
-  svalue_t *argp;
+  svalue_t* argp;
 
   argp = (sp--)->u.lvalue;
 
@@ -626,6 +657,7 @@ void f_or_eq() {
     error("Bad right type to |=\n");
   }
   sp->u.number = argp->u.number |= sp->u.number;
+  argp->subtype = 0;
   sp->subtype = 0;
 
 watch_exit:
@@ -637,8 +669,8 @@ watch_exit:
 }
 
 void f_parse_command() {
-  svalue_t *arg;
-  svalue_t *fp;
+  svalue_t* arg;
+  svalue_t* fp;
   int i;
   int num_arg;
 
@@ -773,9 +805,10 @@ void f_range(int code) {
         push_constant_string("");
         return;
       }
-      char *tmp = new_string(to - from, "f_range");
+      char* tmp = new_string(to - from, "f_range");
       memcpy(tmp, iter.data() + from, to - from);
       tmp[to - from] = '\0';
+      MSTR_TAG_SUBSTRING(tmp, iter.is_ascii());
 
       pop_3_elems();
       push_malloced_string(tmp);
@@ -784,7 +817,7 @@ void f_range(int code) {
     case T_BUFFER: {
       int from, to, len;
 
-      buffer_t *rbuf = sp->u.buf;
+      buffer_t* rbuf = sp->u.buf;
 
       len = rbuf->size;
       to = (--sp)->u.number;
@@ -820,7 +853,7 @@ void f_range(int code) {
         to = len - 1;
       }
       {
-        buffer_t *nbuf = allocate_buffer(to - from + 1);
+        buffer_t* nbuf = allocate_buffer(to - from + 1);
         memcpy(nbuf->item, rbuf->item + from, to - from + 1);
         free_buffer(rbuf);
         put_buffer(nbuf);
@@ -831,7 +864,7 @@ void f_range(int code) {
     case T_ARRAY: {
       int from, to;
 
-      array_t *v = sp->u.arr;
+      array_t* v = sp->u.arr;
       to = (--sp)->u.number;
       if (code & 0x01) {
         to = v->size - to;
@@ -886,7 +919,9 @@ void f_extract_range(int code) {
         sp->subtype = STRING_CONSTANT;
         sp->u.string = "";
       } else {
-        put_malloced_string(string_copy(iter.data() + offset, "f_extract_range"));
+        char* sub = string_copy(iter.data() + offset, "f_extract_range");
+        MSTR_TAG_SUBSTRING(sub, iter.is_ascii());
+        put_malloced_string(sub);
       }
       free_string_svalue(sp + 1);
       break;
@@ -895,8 +930,8 @@ void f_extract_range(int code) {
       int32_t from;
       size_t len;
 
-      buffer_t *rbuf = sp->u.buf;
-      buffer_t *nbuf;
+      buffer_t* rbuf = sp->u.buf;
+      buffer_t* nbuf;
 
       len = rbuf->size;
       from = (--sp)->u.number;
@@ -927,7 +962,7 @@ void f_extract_range(int code) {
     case T_ARRAY: {
       size_t from;
 
-      array_t *v = sp->u.arr;
+      array_t* v = sp->u.arr;
       from = (--sp)->u.number;
       if (code) {
         from = v->size - from;
@@ -944,12 +979,15 @@ void f_extract_range(int code) {
 void f_rsh() {
   CHECK_TYPES((sp - 1), T_NUMBER, 1, F_RSH);
   CHECK_TYPES(sp, T_NUMBER, 2, F_RSH);
+  // Mask the shift count to the low 6 bits (mod 64) -- see f_lsh().
+  LPC_INT count = sp->u.number & 63;
   sp--;
-  sp->u.number >>= (sp + 1)->u.number;
+  sp->u.number >>= count;
+  sp->subtype = 0;
 }
 
 void f_rsh_eq() {
-  svalue_t *argp;
+  svalue_t* argp;
 
   if ((argp = sp->u.lvalue)->type != T_NUMBER) {
     error("Bad left type to >>=\n");
@@ -966,7 +1004,8 @@ void f_rsh_eq() {
     assign_svalue_no_free(&watched_old_val, argp);
   }
 
-  sp->u.number = argp->u.number >>= sp->u.number;
+  sp->u.number = argp->u.number >>= (sp->u.number & 63);
+  argp->subtype = 0;
   sp->subtype = 0;
   if (watched_map) {
     mapping_fire_watch(watched_map, global_lvalue_mapping_watched.keys, global_lvalue_mapping_watched.depth, &watched_old_val, argp);
@@ -976,7 +1015,7 @@ void f_rsh_eq() {
 }
 
 void f_sub_eq() {
-  svalue_t *argp = (sp--)->u.lvalue;
+  svalue_t* argp = (sp--)->u.lvalue;
 
   mapping_t *watched_map = nullptr;
   svalue_t watched_old_val;
@@ -989,6 +1028,7 @@ void f_sub_eq() {
   switch (argp->type | sp->type) {
     case T_NUMBER: {
       sp->u.number = argp->u.number -= sp->u.number;
+      argp->subtype = 0;
       sp->subtype = 0;
       break;
     }
@@ -1003,7 +1043,11 @@ void f_sub_eq() {
         sp->type = T_REAL;
         sp->u.real = argp->u.real -= sp->u.number;
       } else {
-        sp->u.real = argp->u.number -= sp->u.real;
+        /* Untyped lvalue (mixed/mapping value): promote to float. See the
+         * T_NUMBER case of F_ADD_EQ in interpret.cc for the full rationale. */
+        argp->type = T_REAL;
+        argp->u.real = argp->u.number - sp->u.real;
+        sp->u.real = argp->u.real;
       }
       break;
     }
@@ -1015,14 +1059,23 @@ void f_sub_eq() {
     }
 
     case T_LVALUE_BYTE | T_NUMBER: {
-      char c;
+      LPC_INT res = *argp->u.lvalue_byte - sp->u.number;
 
-      c = *global_lvalue_byte.u.lvalue_byte - sp->u.number;
-
-      if (global_lvalue_byte.subtype == 0 && c == '\0') {
+      if (res < 0 || res > 255) {
+        error("Buffer byte value out of range: must be 0..255.\n");
+      }
+      if (argp->subtype == 0 && res == 0) {
         error("Strings cannot contain 0 bytes.\n");
       }
-      *global_lvalue_byte.u.lvalue_byte = c;
+      *argp->u.lvalue_byte = static_cast<unsigned char>(res);
+      sp->u.number = res;
+      sp->subtype = 0;
+      break;
+    }
+
+    case T_LVALUE_CODEPOINT | T_NUMBER: {
+      sp->u.number = codepoint_lvalue_add(-sp->u.number);
+      sp->subtype = 0;
       break;
     }
 
@@ -1070,20 +1123,20 @@ void f_sub_eq() {
  * Binary search is used on the normal tables.
  */
 
-#define SWITCH_CASE_SIZE (sizeof(LPC_INT) + sizeof(short))
+#define SWITCH_CASE_SIZE (static_cast<int>(sizeof(LPC_INT) + sizeof(short)))
 
 /* offsets from 'pc' */
 enum { SW_TYPE = 0, SW_TABLE = 1, SW_ENDTAB = 3, SW_DEFAULT = 5 };
 
 /* offsets used for range (L_ for lower member, U_ for upper member) */
 enum { L_LOWER = 0 };
-#define L_TYPE (sizeof(LPC_INT))
+#define L_TYPE (static_cast<int>(sizeof(LPC_INT)))
 #define L_UPPER (SWITCH_CASE_SIZE)
-#define L_ADDR (SWITCH_CASE_SIZE + sizeof(LPC_INT))
+#define L_ADDR (SWITCH_CASE_SIZE + static_cast<int>(sizeof(LPC_INT)))
 #define U_LOWER (-SWITCH_CASE_SIZE)
-#define U_TYPE (-SWITCH_CASE_SIZE + sizeof(LPC_INT))
+#define U_TYPE (-SWITCH_CASE_SIZE + static_cast<int>(sizeof(LPC_INT)))
 enum { U_UPPER = 0 };
-#define U_ADDR (sizeof(LPC_INT))
+#define U_ADDR (static_cast<int>(sizeof(LPC_INT)))
 
 // FIXME: The variable naming scheme is horrible, need to
 // read again and rename what i, d, s, r to something meaningful.
@@ -1142,7 +1195,7 @@ void f_switch() {
 
   if (i >= 13) {
     if (i == 0xe) {
-      char *zz = end_tab - sizeof(LPC_INT);
+      char* zz = end_tab - sizeof(LPC_INT);
       /* fastest switch format : lookup table */
       l = pc + offset;
       COPY_INT(&d, zz);
@@ -1268,10 +1321,11 @@ void f_xor() {
   CHECK_TYPES(sp, T_NUMBER, 2, F_XOR);
   sp--;
   sp->u.number ^= (sp + 1)->u.number;
+  sp->subtype = 0;
 }
 
 void f_xor_eq() {
-  svalue_t *argp;
+  svalue_t* argp;
 
   if ((argp = sp->u.lvalue)->type != T_NUMBER) {
     error("Bad left type to ^=\n");
@@ -1289,6 +1343,8 @@ void f_xor_eq() {
   }
 
   sp->u.number = argp->u.number ^= sp->u.number;
+  argp->subtype = 0;
+  sp->subtype = 0;
   if (watched_map) {
     mapping_fire_watch(watched_map, global_lvalue_mapping_watched.keys, global_lvalue_mapping_watched.depth, &watched_old_val, argp);
     reset_watched_mapping_state();
@@ -1297,7 +1353,7 @@ void f_xor_eq() {
 }
 
 void f_function_constructor() {
-  funptr_t *fp = nullptr;
+  funptr_t* fp = nullptr;
   int kind;
   unsigned short index;
 
@@ -1346,8 +1402,8 @@ void f_function_constructor() {
 }
 
 void f__evaluate() {
-  svalue_t *v;
-  svalue_t *arg = sp - st_num_arg + 1;
+  svalue_t* v;
+  svalue_t* arg = sp - st_num_arg + 1;
 
   if (arg->type != T_FUNCTION) {
     pop_n_elems(st_num_arg - 1);
@@ -1363,7 +1419,7 @@ void f__evaluate() {
 }
 
 void f_sscanf() {
-  svalue_t *fp;
+  svalue_t* fp;
   int i;
   int num_arg;
 

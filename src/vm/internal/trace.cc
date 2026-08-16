@@ -8,6 +8,8 @@
 // FIXME: for svalue_to_string
 #include "packages/core/sprintf.h"
 
+#include "thirdparty/scope_guard/scope_guard.hpp"
+
 // Dump a stack trace at current location.
 
 /* The end of a static buffer */
@@ -15,18 +17,28 @@
 
 namespace {
 
-void get_trace_details(const program_t *prog, long findex, const char **fname, int *na, int *nl) {
-  function_t *cfp = &prog->function_table[findex];
+// Formatting a frame's arguments/locals (below) can itself call error() --
+// e.g. an object whose object_name() apply always throws -- which re-enters
+// dump_trace() while the outer call is still walking the stack. Without a
+// guard, each re-entry re-dumps and thus re-embeds the still-in-progress
+// outer trace's text (itself containing the trace before that, ...), so the
+// output grows combinatorially with recursion depth instead of linearly.
+// Let the inner error just report "trace suppressed" (see error_handler()
+// in simulate.cc) and let the outer, already-in-progress dump continue.
+bool dump_trace_in_progress = false;
+
+void get_trace_details(const program_t* prog, long findex, const char** fname, int* na, int* nl) {
+  function_t* cfp = &prog->function_table[findex];
 
   *fname = cfp->funcname;
   *na = cfp->num_arg;
   *nl = cfp->num_local;
 }
 
-void dump_trace_line(const char *fname, const char *pname, const char *const obname, char *where) {
+void dump_trace_line(const char* fname, const char* pname, const char* const obname, char* where) {
   char line[256];
-  char *end = EndOf(line);
-  char *p;
+  char* end = EndOf(line);
+  char* p;
 
   p = strput(line, end, "Object: ");
   if (obname[0] != '<' && p < end) {
@@ -43,14 +55,16 @@ void dump_trace_line(const char *fname, const char *pname, const char *const obn
   p = strput(p, end, "() at ");
   p = strput(p, end, where);
   p = strput(p, end, "\n");
-  debug_message(line);
+  // line embeds object/program filenames and function names, which can
+  // contain '%'; never use it as the printf format.
+  debug_message("%s", line);
 }
 
 }  // namespace
 
-const char *dump_trace(int how) {
-  control_stack_t *p;
-  const char *ret = nullptr;
+const char* dump_trace(int how) {
+  control_stack_t* p;
+  const char* ret = nullptr;
   int num_arg = -1, num_local = -1;
 
   int i;
@@ -61,6 +75,11 @@ const char *dump_trace(int how) {
   if (csp < &control_stack[0]) {
     return nullptr;
   }
+  if (dump_trace_in_progress) {
+    return nullptr;
+  }
+  dump_trace_in_progress = true;
+  DEFER { dump_trace_in_progress = false; };
 
   if (how) {
     last_instructions();
@@ -68,10 +87,10 @@ const char *dump_trace(int how) {
 
   debug_message("--- trace ---\n");
   for (p = csp; p >= &control_stack[0]; p--) {
-    struct program_t *trace_prog;
-    struct object_t *trace_obj;
-    char *trace_pc;
-    struct svalue_t *trace_fp;
+    struct program_t* trace_prog;
+    struct object_t* trace_obj;
+    char* trace_pc;
+    struct svalue_t* trace_fp;
 
     if (p == csp) {
       trace_prog = current_prog;
@@ -87,7 +106,7 @@ const char *dump_trace(int how) {
     debug_message("--- frame %td ----\n", p - &control_stack[0]);
     switch (p[0].framekind & FRAME_MASK) {
       case FRAME_FUNCTION: {
-        const char *fname;
+        const char* fname;
         get_trace_details(trace_prog, p[0].fr.table_index, &fname, &num_arg, &num_local);
         dump_trace_line(fname, trace_prog->filename, trace_obj->obname,
                         get_line_number(trace_pc, trace_prog));
@@ -150,7 +169,7 @@ const char *dump_trace(int how) {
       debug_message("]\n");
     }
     if (num_local > 0 && num_arg != -1) {
-      struct svalue_t *ptr = trace_fp + num_arg;
+      struct svalue_t* ptr = trace_fp + num_arg;
       debug_message("locals: [");
       for (i = 0; i < num_local; i++) {
         outbuffer_t outbuf;
@@ -171,16 +190,16 @@ const char *dump_trace(int how) {
   return ret;
 }
 
-array_t *get_svalue_trace() {
-  control_stack_t *p;
-  array_t *v;
-  mapping_t *m;
-  const char *file;
+array_t* get_svalue_trace() {
+  control_stack_t* p;
+  array_t* v;
+  mapping_t* m;
+  const char* file;
   int line;
-  const char *fname;
+  const char* fname;
   int num_arg, num_local = -1;
 
-  svalue_t *ptr;
+  svalue_t* ptr;
   int i;
 
   if (current_prog == nullptr) {
@@ -233,7 +252,7 @@ array_t *get_svalue_trace() {
     add_mapping_malloced_string(m, "file", add_slash(file));
     add_mapping_pair(m, "line", line);
     if (num_arg != -1) {
-      array_t *v2;
+      array_t* v2;
 
       ptr = p[1].fp;
       v2 = allocate_empty_array(num_arg);
@@ -244,7 +263,7 @@ array_t *get_svalue_trace() {
       v2->ref--;
     }
     if (num_local > 0 && num_arg != -1) {
-      array_t *v2;
+      array_t* v2;
 
       ptr = p[1].fp + num_arg;
       v2 = allocate_empty_array(num_local);
@@ -294,7 +313,7 @@ array_t *get_svalue_trace() {
   add_mapping_malloced_string(m, "file", add_slash(file));
   add_mapping_pair(m, "line", line);
   if (num_arg > 0) {
-    array_t *v2;
+    array_t* v2;
 
     v2 = allocate_empty_array(num_arg);
     for (i = 0; i < num_arg; i++) {
@@ -304,7 +323,7 @@ array_t *get_svalue_trace() {
     v2->ref--;
   }
   if (num_local > 0 && num_arg != -1) {
-    array_t *v2;
+    array_t* v2;
 
     v2 = allocate_empty_array(num_local);
     for (i = 0; i < num_local; i++) {

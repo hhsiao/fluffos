@@ -15,16 +15,17 @@
 
 enum { MAX_RECURSION = 25 };
 
-static void gc_mapping(mapping_t * /*m*/);
-static void check_svalue(svalue_t * /*v*/);
+static void gc_mapping(mapping_t* /*m*/);
+static void check_svalue(svalue_t* /*v*/);
 
 static int cleaned, nested;
 
-static void check_svalue(svalue_t *v) {
+static void check_svalue(svalue_t* v) {
   int idx;
 
   nested++;
   if (nested > MAX_RECURSION) {
+    nested--;  // keep nested balanced, or reclaim stays disabled for the pass
     return;
   }
   switch (v->type) {
@@ -46,17 +47,16 @@ static void check_svalue(svalue_t *v) {
       break;
     case T_FUNCTION: {
       svalue_t tmp;
-      program_t *prog;
 
       if (v->u.fp->hdr.owner && (v->u.fp->hdr.owner->flags & O_DESTRUCTED)) {
-        if (v->u.fp->hdr.type == (FP_LOCAL | FP_NOT_BINDABLE)) {
-          prog = v->u.fp->hdr.owner->prog;
-          prog->func_ref--;
-          debug(d_flag, "subtr func ref /%s: now %i\n", prog->filename, prog->func_ref);
-          if (!prog->ref && !prog->func_ref) {
-            deallocate_program(prog);
-          }
-        }
+        // Only release the owner reference; the funptr itself lives on (it is
+        // still held by this variable) and dealloc_funp() will decrement the
+        // program's func_ref against the funptr's stored creation program when
+        // it is finally freed. Decrementing func_ref here too was a double
+        // decrement that underflowed func_ref and leaked the program (and
+        // could deallocate a program the funptr still referenced). FP_FUNCTIONAL
+        // funptrs, which take no special-case here, are already handled
+        // correctly this way.
         free_object(&v->u.fp->hdr.owner, "reclaim_objects");
         v->u.fp->hdr.owner = nullptr;
         cleaned++;
@@ -72,7 +72,7 @@ static void check_svalue(svalue_t *v) {
   nested--;
 }
 
-static void gc_mapping(mapping_t *m) {
+static void gc_mapping(mapping_t* m) {
   /* Be careful to correctly handle destructed mapping keys.  We can't
    * just call check_svalue() b/c the hash would be wrong and the '0'
    * element we add would be unreferenceable (in most cases)
@@ -114,7 +114,7 @@ int reclaim_objects(bool is_auto) {
                        TickEvent::callback_type([] { return reclaim_objects(true); }));
   }
   int i;
-  object_t *ob;
+  object_t* ob;
 
   reclaim_call_outs();
 

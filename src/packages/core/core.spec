@@ -25,6 +25,8 @@ object _this_object();
 /* used for implicit float/int conversions */
 int _to_int(string | float | int OR_BUFFER);
 float _to_float(string | float | int);
+/* used for implicit string/array -> buffer conversions */
+buffer _to_buffer(string | buffer | mixed *);
 /* used by new() */
 object _new(string, ...);
 
@@ -33,6 +35,7 @@ mixed evaluate _evaluate(mixed, ...);
 object this_object _this_object();
 int to_int _to_int(string | float | int OR_BUFFER);
 float to_float _to_float(string | float | int);
+buffer to_buffer _to_buffer(string | buffer | mixed *);
 object clone_object _new(string, ...);
 
 function bind(function, object);
@@ -79,7 +82,7 @@ void move_object(object | string);
 void add_action(string | function, string | string *, void | int);
 string query_verb();
 int command(string);
-int remove_action(string, string);
+int remove_action(string | function, string);
 int living(object default: F__THIS_OBJECT);
 mixed *commands();
 void disable_commands();
@@ -218,6 +221,8 @@ void set_hide(int);
 
 #ifndef NO_RESETS
 void set_reset(object, void | int);
+int request_clean_up(object default: F__THIS_OBJECT);
+void set_clean_up(object, void | int);
 #endif
 
 #ifndef NO_SHADOWS
@@ -280,6 +285,7 @@ int get_char(string | function, ...);
 object *children(string);
 
 void reload_object(object);
+int recompile_object(object);
 
 void error(string);
 int uptime();
@@ -378,4 +384,9 @@ int perf_counter_ns();
 int time_ns();
 
 mixed *sys_network_ports();
+#ifndef __EMSCRIPTEN__
+/* No TLS on the wasm target: the browser terminates TLS long before
+ * bytes reach the driver, so the efun does not exist there. (The
+ * fullspec is preprocessed with the TARGET compiler, so this works.) */
 void sys_reload_tls(int);
+#endif

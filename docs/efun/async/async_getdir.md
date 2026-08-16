@@ -1,5 +1,4 @@
 ---
-layout: doc
 title: async / async_getdir
 ---
 # async_getdir
@@ -29,6 +28,12 @@ title: async / async_getdir
             // empty array when no matching files exist
             // array of matching filenames
         }
+
+### NOTE
+
+    When the 'this_player in call_out' driver setting is enabled,
+    this_player() inside the callback is preserved from the time the
+    request was made, like call_out().
 
 ### SEE ALSO
 

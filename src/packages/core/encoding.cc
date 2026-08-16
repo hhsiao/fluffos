@@ -7,7 +7,7 @@
 #endif
 
 namespace {
-const char *default_encoding = "utf-8";
+const char* default_encoding = "utf-8";
 }  // namespace
 
 #ifdef F_SET_ENCODING
@@ -20,7 +20,7 @@ void f_set_encoding() {
     return;
   }
 
-  auto *ip = command_giver->interactive;
+  auto* ip = command_giver->interactive;
 
   // Reset to no-transcoding
   if (!st_num_arg) {
@@ -35,7 +35,7 @@ void f_set_encoding() {
   // Set to specific encoding
 
   // ignore if user want utf8
-  UConverter *new_trans = nullptr;
+  UConverter* new_trans = nullptr;
   if (ucnv_compareNames(default_encoding, sp->u.string) != 0) {
     UErrorCode error_code = U_ZERO_ERROR;
     new_trans = ucnv_open(sp->u.string, &error_code);
@@ -59,7 +59,7 @@ void f_set_encoding() {
   }
 
   UErrorCode error_code = U_ZERO_ERROR;
-  const auto *name = ucnv_getName(ip->trans, &error_code);
+  const auto* name = ucnv_getName(ip->trans, &error_code);
   if (U_FAILURE(error_code)) {
     error("Fail to set encoding, ucnv_getName error: %s.", u_errorName(error_code));
   }
@@ -77,11 +77,11 @@ void f_query_encoding() {
     return;
   }
 
-  const auto *res = default_encoding;
+  const auto* res = default_encoding;
 
-  auto *ip = command_giver->interactive;
+  auto* ip = command_giver->interactive;
   if (ip) {
-    auto *trans = ip->trans;
+    auto* trans = ip->trans;
     if (trans) {
       UErrorCode error_code = U_ZERO_ERROR;
       res = ucnv_getName(trans, &error_code);
@@ -97,12 +97,12 @@ void f_query_encoding() {
 
 #ifdef F_STRING_ENCODE
 void f_string_encode() {
-  const auto *encoding = sp->u.string;
-  const auto *data = (sp - 1)->u.string;
+  const auto* encoding = sp->u.string;
+  const auto* data = (sp - 1)->u.string;
   auto len = SVALUE_STRLEN(sp - 1);
 
   UErrorCode error_code = U_ZERO_ERROR;
-  auto *trans = ucnv_open(encoding, &error_code);
+  auto* trans = ucnv_open(encoding, &error_code);
   if (U_FAILURE(error_code)) {
     error("string_encode: Invalid encoding '%s', error: %s.", encoding, u_errorName(error_code));
   }
@@ -117,8 +117,8 @@ void f_string_encode() {
 
   size_t const translen = required;
   error_code = U_ZERO_ERROR;
-  auto *buffer = allocate_buffer(translen);
-  auto *transdata = (char *)buffer->item;
+  auto* buffer = allocate_buffer(translen);
+  auto* transdata = (char*)buffer->item;
 
   auto written = ucnv_fromAlgorithmic(trans, UConverterType::UCNV_UTF8, transdata, translen, data,
                                       len, &error_code);
@@ -137,15 +137,15 @@ void f_string_encode() {
 
 #ifdef F_STRING_DECODE
 void f_string_decode() {
-  const auto *encoding = sp->u.string;
-  auto *data = (char *)((sp - 1)->u.buf->item);
+  const auto* encoding = sp->u.string;
+  auto* data = (char*)((sp - 1)->u.buf->item);
   auto len = (sp - 1)->u.buf->size;
 
   // get rid of all ending '\0's from buffer.
   while (len > 1 && data[len - 1] == '\0') len--;
 
   UErrorCode error_code = U_ZERO_ERROR;
-  auto *trans = ucnv_open(encoding, &error_code);
+  auto* trans = ucnv_open(encoding, &error_code);
   if (U_FAILURE(error_code)) {
     error("string_decode: Invalid encoding '%s', error: %s.", encoding, u_errorName(error_code));
   }
@@ -158,7 +158,7 @@ void f_string_decode() {
     error("string_decode: error: %s.", u_errorName(error_code));
   }
 
-  auto *res = new_string(required, "f_string_decode");
+  auto* res = new_string(required, "f_string_decode");
 
   error_code = U_ZERO_ERROR;
   auto written =
@@ -179,9 +179,9 @@ void f_string_decode() {
 
 #ifdef F_BUFFER_TRANSCODE
 void f_buffer_transcode() {
-  const auto *to_encoding = sp->u.string;
-  const auto *from_encoding = (sp - 1)->u.string;
-  auto *data = (char *)((sp - 2)->u.buf->item);
+  const auto* to_encoding = sp->u.string;
+  const auto* from_encoding = (sp - 1)->u.string;
+  auto* data = (char*)((sp - 2)->u.buf->item);
   auto len = (sp - 2)->u.buf->size;
 
   UErrorCode error_code = U_ZERO_ERROR;
@@ -192,11 +192,11 @@ void f_buffer_transcode() {
     error("buffer_transcode: error: %s.", u_errorName(error_code));
   }
 
-  auto *res = allocate_buffer(required);
+  auto* res = allocate_buffer(required);
 
   error_code = U_ZERO_ERROR;
   auto written =
-      ucnv_convert(to_encoding, from_encoding, (char *)res->item, required, data, len, &error_code);
+      ucnv_convert(to_encoding, from_encoding, (char*)res->item, required, data, len, &error_code);
   DEBUG_CHECK(written != required, "Bug: translation buffer size calculation error.");
   if (U_FAILURE(error_code)) {
     free_buffer(res);

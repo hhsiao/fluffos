@@ -1,5 +1,4 @@
 ---
-layout: doc
 title: async / async_write
 ---
 # async_write
@@ -26,6 +25,12 @@ title: async / async_write
             // -1 for failure
             //  0 for success
         }
+
+### NOTE
+
+    When the 'this_player in call_out' driver setting is enabled,
+    this_player() inside the callback is preserved from the time the
+    request was made, like call_out().
 
 ### SEE ALSO
 

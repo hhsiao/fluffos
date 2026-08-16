@@ -58,7 +58,7 @@ enum control_jump_type { CJ_BREAK_SWITCH = 2, CJ_BREAK = 0, CJ_CONTINUE = 1 };
 union parse_value {
   LPC_INT number;
   LPC_FLOAT real;
-  struct parse_node_t *expr;
+  struct parse_node_t* expr;
 };
 
 struct parse_node_t {
@@ -73,7 +73,7 @@ struct parse_node_t {
 };
 
 typedef struct parse_node_block_s {
-  struct parse_node_block_s *next;
+  struct parse_node_block_s* next;
   parse_node_t nodes[NODES_PER_BLOCK];
 } parse_node_block_t;
 
@@ -109,16 +109,29 @@ typedef struct parse_node_block_s {
 #define CREATE_TERNARY_OP_1(vn, op, t, x, y, z, p)        \
   SAFE((vn) = new_node(); (vn)->kind = NODE_TERNARY_OP_1; \
        INT_CREATE_TERNARY_OP(vn, op, t, x, y, z); (vn)->r.expr->type = p;)
+// NOTE: this macro is also used to synthesize IMPLICIT returns (an
+// appended `return 0;` for a function/closure body that doesn't already
+// end in one -- see rule_func() and rule_primary_expr_anon_func()) at a
+// point where current_line no longer reflects the body at all (parsing has
+// already moved on to whatever follows, possibly across an #include pop
+// into a different file). Those call sites rely on this staying
+// new_node_no_line() and must keep working unmodified. Real, user-written
+// `return` statements get an accurate line stamped explicitly by
+// rule_return_void()/rule_return_expr() right after calling this macro --
+// see the comment there for why (a NODE_RETURN wrapping only
+// new_node_no_line() children, e.g. `return <constant>;`, would otherwise
+// never trigger switch_to_line() and its bytecode would silently inherit
+// whichever line was active beforehand).
 #define CREATE_RETURN(vn, val) \
   SAFE((vn) = new_node_no_line(); (vn)->kind = NODE_RETURN; (vn)->r.expr = val;)
 #define CREATE_LAND_LOR(vn, op, x, y)                                                        \
   SAFE((vn) = new_node(); (vn)->kind = NODE_LAND_LOR; (vn)->v.number = op; (vn)->l.expr = x; \
        (vn)->r.expr = y; (vn)->type = ((x->type == y->type) ? x->type : TYPE_ANY);)
-#define CREATE_NULLISH(vn, x, y)                                                             \
-  SAFE((vn) = new_node(); (vn)->kind = NODE_NULLISH; (vn)->l.expr = x; (vn)->r.expr = y;   \
+#define CREATE_NULLISH(vn, x, y)                                                         \
+  SAFE((vn) = new_node(); (vn)->kind = NODE_NULLISH; (vn)->l.expr = x; (vn)->r.expr = y; \
        (vn)->type = TYPE_ANY;)
-#define CREATE_LOGICAL_ASSIGN(vn, op, lv, rv)                                               \
-  SAFE((vn) = new_node(); (vn)->kind = NODE_LOGICAL_ASSIGN; (vn)->v.number = op;            \
+#define CREATE_LOGICAL_ASSIGN(vn, op, lv, rv)                                    \
+  SAFE((vn) = new_node(); (vn)->kind = NODE_LOGICAL_ASSIGN; (vn)->v.number = op; \
        (vn)->l.expr = lv; (vn)->r.expr = rv; (vn)->type = lv->type;)
 #define CREATE_CALL(vn, op, t, el)                                                              \
   SAFE((vn) = el; (vn)->kind = NODE_CALL; (vn)->l.number = (vn)->v.number; (vn)->v.number = op; \
@@ -155,17 +168,13 @@ typedef struct parse_node_block_s {
   SAFE((vn) = new_node_no_line(); (vn)->kind = NODE_NUMBER; \
        (vn)->type = (val ? TYPE_NUMBER : TYPE_ANY); (vn)->v.number = val;)
 #define CREATE_STRING(vn, val)                                                        \
-  SAFE((vn) = new_node_no_line();                                                     \
-       (vn)->kind = NODE_STRING; (vn)->type = TYPE_STRING;                            \
+  SAFE((vn) = new_node_no_line(); (vn)->kind = NODE_STRING; (vn)->type = TYPE_STRING; \
        (vn)->v.number = store_prog_string(val);)
-#define CREATE_EXPR_LIST(vn, pn)                                                  \
-  SAFE((vn) = new_node();                                                         \
-       (vn)->v.number = (pn ? ((parse_node_t *)pn)->kind : 0);                    \
-       (vn)->l.expr = (pn ? ((parse_node_t *)pn)->l.expr : (vn));                 \
-       (vn)->r.expr = pn;)
+#define CREATE_EXPR_LIST(vn, pn)                                                 \
+  SAFE((vn) = new_node(); (vn)->v.number = (pn ? ((parse_node_t*)pn)->kind : 0); \
+       (vn)->l.expr = (pn ? ((parse_node_t*)pn)->l.expr : (vn)); (vn)->r.expr = pn;)
 #define CREATE_EXPR_NODE(vn, pn, f)                                                       \
-  SAFE((vn) = new_node_no_line();                                                         \
-       (vn)->v.expr = pn; (vn)->l.expr = vn; (vn)->r.expr = 0;                            \
+  SAFE((vn) = new_node_no_line(); (vn)->v.expr = pn; (vn)->l.expr = vn; (vn)->r.expr = 0; \
        (vn)->type = f;)
 #define CREATE_CATCH(vn, pn) \
   SAFE((vn) = new_node(); (vn)->kind = NODE_CATCH; (vn)->type = TYPE_ANY; (vn)->r.expr = pn;)
@@ -181,15 +190,15 @@ void release_tree(void);
 void lock_expressions(void);
 void unlock_expressions(void);
 /* node functions */
-parse_node_t *new_node(void);
-parse_node_t *new_node_no_line(void);
-parse_node_t *make_branched_node(short, char, parse_node_t *, parse_node_t *);
+parse_node_t* new_node(void);
+parse_node_t* new_node_no_line(void);
+parse_node_t* make_branched_node(short, char, parse_node_t*, parse_node_t*);
 /* parser grammar functions */
-parse_node_t *binary_int_op(parse_node_t *, parse_node_t *, char, const char *);
-parse_node_t *make_range_node(int, parse_node_t *, parse_node_t *, parse_node_t *);
-parse_node_t *insert_pop_value(parse_node_t *);
-parse_node_t *pop_value(parse_node_t *);
-parse_node_t *optimize_loop_test(parse_node_t *);
-int is_boolean(parse_node_t *);
+parse_node_t* binary_int_op(parse_node_t*, parse_node_t*, char, const char*);
+parse_node_t* make_range_node(int, parse_node_t*, parse_node_t*, parse_node_t*);
+parse_node_t* insert_pop_value(parse_node_t*);
+parse_node_t* pop_value(parse_node_t*);
+parse_node_t* optimize_loop_test(parse_node_t*);
+int is_boolean(parse_node_t*);
 
 #endif

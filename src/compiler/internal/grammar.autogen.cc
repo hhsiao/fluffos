@@ -55,55 +55,41 @@
 #define YYSKELETON_NAME "yacc.c"
 
 /* Pure parsers.  */
-#define YYPURE 0
+#define YYPURE 2
 
 /* Push parsers.  */
-#define YYPUSH 0
+#define YYPUSH 1
 
 /* Pull parsers.  */
-#define YYPULL 1
+#define YYPULL 0
 
 
 
 
 /* First part of user prologue.  */
-#line 11 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
+#line 39 "$REPO_ROOT$/src/compiler/internal/grammar.y"
 
 #include "base/std.h"
-
 #include "compiler/internal/grammar_rules.h"
-#include "vm/vm.h"
-#include "vm/internal/base/machine.h"
-#include "compiler/internal/compiler.h"
-#include "compiler/internal/lex.h"
-#include "compiler/internal/scratchpad.h"
-#include "compiler/internal/generate.h"
-
-extern char *outp;
 
 /*
- * This is the grammar definition of LPC, and its parse tree generator.
- */
-
-/* down to one global :)
-   bits:
-      SWITCH_CONTEXT     - we're inside a switch
-      LOOP_CONTEXT       - we're inside a loop
-      SWITCH_STRINGS     - a string case has been found
-      SWITCH_NUMBERS     - a non-zero numeric case has been found
-      SWITCH_RANGES      - a range has been found
-      SWITCH_DEFAULT     - a default has been found
+ * LPC grammar — parse-tree generator.
+ *
+ * Rules are ordered top-down: the entry point and high-level structure
+ * appear first; details and primitives are defined further below.
+ * All bison rules may forward-reference nonterminals defined later.
+ *
+ * `context` tracks nesting state used for semantic error checking:
+ *   SWITCH_CONTEXT, LOOP_CONTEXT, SPECIAL_CONTEXT, SWITCH_STRINGS,
+ *   SWITCH_NUMBERS, SWITCH_RANGES, SWITCH_DEFAULT.
  */
 int context;
 int num_refs;
 int func_present;
-/*
- * bison & yacc don't prototype this in y.tab.h
- */
-int yyparse (void);
 
+void yyerror(void *yyscanner, const char *msg);
 
-#line 107 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+#line 93 "$BUILD_ROOT$/src/grammar.autogen.cc"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -137,43 +123,43 @@ enum yysymbol_kind_t
   YYSYMBOL_L_STRING = 3,                   /* L_STRING  */
   YYSYMBOL_L_NUMBER = 4,                   /* L_NUMBER  */
   YYSYMBOL_L_REAL = 5,                     /* L_REAL  */
-  YYSYMBOL_L_BASIC_TYPE = 6,               /* L_BASIC_TYPE  */
-  YYSYMBOL_L_TYPE_MODIFIER = 7,            /* L_TYPE_MODIFIER  */
-  YYSYMBOL_L_DEFINED_NAME = 8,             /* L_DEFINED_NAME  */
-  YYSYMBOL_L_IDENTIFIER = 9,               /* L_IDENTIFIER  */
-  YYSYMBOL_L_EFUN = 10,                    /* L_EFUN  */
-  YYSYMBOL_L_INC = 11,                     /* L_INC  */
-  YYSYMBOL_L_DEC = 12,                     /* L_DEC  */
-  YYSYMBOL_L_ASSIGN = 13,                  /* L_ASSIGN  */
-  YYSYMBOL_L_LAND = 14,                    /* L_LAND  */
-  YYSYMBOL_L_LOR = 15,                     /* L_LOR  */
-  YYSYMBOL_L_LSH = 16,                     /* L_LSH  */
-  YYSYMBOL_L_RSH = 17,                     /* L_RSH  */
-  YYSYMBOL_L_ORDER = 18,                   /* L_ORDER  */
-  YYSYMBOL_L_NOT = 19,                     /* L_NOT  */
-  YYSYMBOL_L_IF = 20,                      /* L_IF  */
-  YYSYMBOL_L_ELSE = 21,                    /* L_ELSE  */
-  YYSYMBOL_L_SWITCH = 22,                  /* L_SWITCH  */
-  YYSYMBOL_L_CASE = 23,                    /* L_CASE  */
-  YYSYMBOL_L_DEFAULT = 24,                 /* L_DEFAULT  */
-  YYSYMBOL_L_RANGE = 25,                   /* L_RANGE  */
-  YYSYMBOL_L_DOT_DOT_DOT = 26,             /* L_DOT_DOT_DOT  */
-  YYSYMBOL_L_WHILE = 27,                   /* L_WHILE  */
-  YYSYMBOL_L_DO = 28,                      /* L_DO  */
-  YYSYMBOL_L_FOR = 29,                     /* L_FOR  */
-  YYSYMBOL_L_FOREACH = 30,                 /* L_FOREACH  */
-  YYSYMBOL_L_IN = 31,                      /* L_IN  */
-  YYSYMBOL_L_BREAK = 32,                   /* L_BREAK  */
-  YYSYMBOL_L_CONTINUE = 33,                /* L_CONTINUE  */
-  YYSYMBOL_L_RETURN = 34,                  /* L_RETURN  */
-  YYSYMBOL_L_ARROW = 35,                   /* L_ARROW  */
-  YYSYMBOL_L_DOT = 36,                     /* L_DOT  */
-  YYSYMBOL_L_INHERIT = 37,                 /* L_INHERIT  */
-  YYSYMBOL_L_COLON_COLON = 38,             /* L_COLON_COLON  */
-  YYSYMBOL_L_ARRAY_OPEN = 39,              /* L_ARRAY_OPEN  */
-  YYSYMBOL_L_MAPPING_OPEN = 40,            /* L_MAPPING_OPEN  */
-  YYSYMBOL_L_FUNCTION_OPEN = 41,           /* L_FUNCTION_OPEN  */
-  YYSYMBOL_L_NEW_FUNCTION_OPEN = 42,       /* L_NEW_FUNCTION_OPEN  */
+  YYSYMBOL_L_TEMPLATE_HEAD = 6,            /* L_TEMPLATE_HEAD  */
+  YYSYMBOL_L_TEMPLATE_MIDDLE = 7,          /* L_TEMPLATE_MIDDLE  */
+  YYSYMBOL_L_TEMPLATE_TAIL = 8,            /* L_TEMPLATE_TAIL  */
+  YYSYMBOL_L_BASIC_TYPE = 9,               /* L_BASIC_TYPE  */
+  YYSYMBOL_L_TYPE_MODIFIER = 10,           /* L_TYPE_MODIFIER  */
+  YYSYMBOL_L_DEFINED_NAME = 11,            /* L_DEFINED_NAME  */
+  YYSYMBOL_L_IDENTIFIER = 12,              /* L_IDENTIFIER  */
+  YYSYMBOL_L_EFUN = 13,                    /* L_EFUN  */
+  YYSYMBOL_L_INC_DEC = 14,                 /* L_INC_DEC  */
+  YYSYMBOL_L_ASSIGN = 15,                  /* L_ASSIGN  */
+  YYSYMBOL_L_LAND = 16,                    /* L_LAND  */
+  YYSYMBOL_L_LOR = 17,                     /* L_LOR  */
+  YYSYMBOL_L_QUESTION_QUESTION = 18,       /* L_QUESTION_QUESTION  */
+  YYSYMBOL_L_SHIFT = 19,                   /* L_SHIFT  */
+  YYSYMBOL_L_EQ_NE = 20,                   /* L_EQ_NE  */
+  YYSYMBOL_L_ORDER = 21,                   /* L_ORDER  */
+  YYSYMBOL_L_IF = 22,                      /* L_IF  */
+  YYSYMBOL_L_ELSE = 23,                    /* L_ELSE  */
+  YYSYMBOL_L_SWITCH = 24,                  /* L_SWITCH  */
+  YYSYMBOL_L_CASE = 25,                    /* L_CASE  */
+  YYSYMBOL_L_DEFAULT = 26,                 /* L_DEFAULT  */
+  YYSYMBOL_L_RANGE = 27,                   /* L_RANGE  */
+  YYSYMBOL_L_DOT_DOT_DOT = 28,             /* L_DOT_DOT_DOT  */
+  YYSYMBOL_L_WHILE = 29,                   /* L_WHILE  */
+  YYSYMBOL_L_DO = 30,                      /* L_DO  */
+  YYSYMBOL_L_FOR = 31,                     /* L_FOR  */
+  YYSYMBOL_L_FOREACH = 32,                 /* L_FOREACH  */
+  YYSYMBOL_L_IN = 33,                      /* L_IN  */
+  YYSYMBOL_L_BREAK = 34,                   /* L_BREAK  */
+  YYSYMBOL_L_CONTINUE = 35,                /* L_CONTINUE  */
+  YYSYMBOL_L_RETURN = 36,                  /* L_RETURN  */
+  YYSYMBOL_L_ARROW = 37,                   /* L_ARROW  */
+  YYSYMBOL_L_INHERIT = 38,                 /* L_INHERIT  */
+  YYSYMBOL_L_COLON_COLON = 39,             /* L_COLON_COLON  */
+  YYSYMBOL_L_OPTIONAL_DOT = 40,            /* L_OPTIONAL_DOT  */
+  YYSYMBOL_L_DOT_OPTIONAL = 41,            /* L_DOT_OPTIONAL  */
+  YYSYMBOL_L_FUNCTION_OPEN = 42,           /* L_FUNCTION_OPEN  */
   YYSYMBOL_L_SSCANF = 43,                  /* L_SSCANF  */
   YYSYMBOL_L_CATCH = 44,                   /* L_CATCH  */
   YYSYMBOL_L_ARRAY = 45,                   /* L_ARRAY  */
@@ -184,139 +170,131 @@ enum yysymbol_kind_t
   YYSYMBOL_L_NEW = 50,                     /* L_NEW  */
   YYSYMBOL_L_PARAMETER = 51,               /* L_PARAMETER  */
   YYSYMBOL_L_TREE = 52,                    /* L_TREE  */
-  YYSYMBOL_L_PREPROCESSOR_COMMAND = 53,    /* L_PREPROCESSOR_COMMAND  */
-  YYSYMBOL_LOWER_THAN_ELSE = 54,           /* LOWER_THAN_ELSE  */
-  YYSYMBOL_55_ = 55,                       /* '?'  */
-  YYSYMBOL_56_ = 56,                       /* '|'  */
-  YYSYMBOL_57_ = 57,                       /* '^'  */
-  YYSYMBOL_58_ = 58,                       /* '&'  */
-  YYSYMBOL_L_EQ = 59,                      /* L_EQ  */
-  YYSYMBOL_L_NE = 60,                      /* L_NE  */
-  YYSYMBOL_61_ = 61,                       /* '<'  */
-  YYSYMBOL_62_ = 62,                       /* '+'  */
-  YYSYMBOL_63_ = 63,                       /* '-'  */
-  YYSYMBOL_64_ = 64,                       /* '*'  */
-  YYSYMBOL_65_ = 65,                       /* '%'  */
-  YYSYMBOL_66_ = 66,                       /* '/'  */
-  YYSYMBOL_67_ = 67,                       /* '~'  */
-  YYSYMBOL_68_ = 68,                       /* ';'  */
-  YYSYMBOL_69_ = 69,                       /* '('  */
-  YYSYMBOL_70_ = 70,                       /* ')'  */
-  YYSYMBOL_71_ = 71,                       /* ':'  */
-  YYSYMBOL_72_ = 72,                       /* ','  */
-  YYSYMBOL_73_ = 73,                       /* '{'  */
-  YYSYMBOL_74_ = 74,                       /* '}'  */
-  YYSYMBOL_75_ = 75,                       /* '$'  */
-  YYSYMBOL_76_ = 76,                       /* '['  */
-  YYSYMBOL_77_ = 77,                       /* ']'  */
-  YYSYMBOL_YYACCEPT = 78,                  /* $accept  */
-  YYSYMBOL_all = 79,                       /* all  */
-  YYSYMBOL_program = 80,                   /* program  */
-  YYSYMBOL_possible_semi_colon = 81,       /* possible_semi_colon  */
-  YYSYMBOL_inheritance = 82,               /* inheritance  */
-  YYSYMBOL_real = 83,                      /* real  */
-  YYSYMBOL_number = 84,                    /* number  */
-  YYSYMBOL_optional_star = 85,             /* optional_star  */
-  YYSYMBOL_block_or_semi = 86,             /* block_or_semi  */
-  YYSYMBOL_identifier = 87,                /* identifier  */
-  YYSYMBOL_function = 88,                  /* function  */
-  YYSYMBOL_89_1 = 89,                      /* $@1  */
-  YYSYMBOL_90_2 = 90,                      /* @2  */
-  YYSYMBOL_def = 91,                       /* def  */
-  YYSYMBOL_modifier_change = 92,           /* modifier_change  */
-  YYSYMBOL_member_name = 93,               /* member_name  */
-  YYSYMBOL_member_name_list = 94,          /* member_name_list  */
-  YYSYMBOL_member_list = 95,               /* member_list  */
-  YYSYMBOL_96_3 = 96,                      /* $@3  */
-  YYSYMBOL_type_decl = 97,                 /* type_decl  */
-  YYSYMBOL_98_4 = 98,                      /* @4  */
-  YYSYMBOL_new_local_name = 99,            /* new_local_name  */
-  YYSYMBOL_atomic_type = 100,              /* atomic_type  */
-  YYSYMBOL_opt_atomic_type = 101,          /* opt_atomic_type  */
-  YYSYMBOL_basic_type = 102,               /* basic_type  */
-  YYSYMBOL_arg_type = 103,                 /* arg_type  */
-  YYSYMBOL_optional_default_arg_value = 104, /* optional_default_arg_value  */
-  YYSYMBOL_new_arg = 105,                  /* new_arg  */
-  YYSYMBOL_argument = 106,                 /* argument  */
-  YYSYMBOL_argument_list = 107,            /* argument_list  */
-  YYSYMBOL_type_modifier_list = 108,       /* type_modifier_list  */
-  YYSYMBOL_type = 109,                     /* type  */
-  YYSYMBOL_cast = 110,                     /* cast  */
-  YYSYMBOL_opt_basic_type = 111,           /* opt_basic_type  */
-  YYSYMBOL_name_list = 112,                /* name_list  */
-  YYSYMBOL_new_name = 113,                 /* new_name  */
-  YYSYMBOL_block = 114,                    /* block  */
-  YYSYMBOL_115_5 = 115,                    /* @5  */
-  YYSYMBOL_decl_block = 116,               /* decl_block  */
-  YYSYMBOL_local_declarations = 117,       /* local_declarations  */
-  YYSYMBOL_118_6 = 118,                    /* $@6  */
-  YYSYMBOL_new_local_def = 119,            /* new_local_def  */
-  YYSYMBOL_single_new_local_def = 120,     /* single_new_local_def  */
-  YYSYMBOL_single_new_local_def_with_init = 121, /* single_new_local_def_with_init  */
-  YYSYMBOL_local_name_list = 122,          /* local_name_list  */
-  YYSYMBOL_local_declaration_statement = 123, /* local_declaration_statement  */
-  YYSYMBOL_124_7 = 124,                    /* $@7  */
-  YYSYMBOL_block_statements = 125,         /* block_statements  */
-  YYSYMBOL_statement = 126,                /* statement  */
-  YYSYMBOL_while = 127,                    /* while  */
-  YYSYMBOL_128_8 = 128,                    /* $@8  */
-  YYSYMBOL_do = 129,                       /* do  */
-  YYSYMBOL_130_9 = 130,                    /* $@9  */
-  YYSYMBOL_for = 131,                      /* for  */
-  YYSYMBOL_132_10 = 132,                   /* $@10  */
-  YYSYMBOL_foreach_var = 133,              /* foreach_var  */
-  YYSYMBOL_foreach_vars = 134,             /* foreach_vars  */
-  YYSYMBOL_foreach = 135,                  /* foreach  */
-  YYSYMBOL_136_11 = 136,                   /* $@11  */
-  YYSYMBOL_for_expr = 137,                 /* for_expr  */
-  YYSYMBOL_first_for_expr = 138,           /* first_for_expr  */
-  YYSYMBOL_switch = 139,                   /* switch  */
-  YYSYMBOL_140_12 = 140,                   /* $@12  */
-  YYSYMBOL_switch_block = 141,             /* switch_block  */
-  YYSYMBOL_case = 142,                     /* case  */
-  YYSYMBOL_case_label = 143,               /* case_label  */
-  YYSYMBOL_constant = 144,                 /* constant  */
-  YYSYMBOL_comma_expr = 145,               /* comma_expr  */
-  YYSYMBOL_ref = 146,                      /* ref  */
-  YYSYMBOL_expr0 = 147,                    /* expr0  */
-  YYSYMBOL_return = 148,                   /* return  */
-  YYSYMBOL_expr_list = 149,                /* expr_list  */
-  YYSYMBOL_expr_list_node = 150,           /* expr_list_node  */
-  YYSYMBOL_expr_list2 = 151,               /* expr_list2  */
-  YYSYMBOL_expr_list3 = 152,               /* expr_list3  */
-  YYSYMBOL_expr_list4 = 153,               /* expr_list4  */
-  YYSYMBOL_assoc_pair = 154,               /* assoc_pair  */
-  YYSYMBOL_lvalue = 155,                   /* lvalue  */
-  YYSYMBOL_l_new_function_open = 156,      /* l_new_function_open  */
-  YYSYMBOL_expr4 = 157,                    /* expr4  */
-  YYSYMBOL_158_13 = 158,                   /* @13  */
-  YYSYMBOL_159_14 = 159,                   /* @14  */
-  YYSYMBOL_expr_or_block = 160,            /* expr_or_block  */
-  YYSYMBOL_catch = 161,                    /* catch  */
-  YYSYMBOL_162_15 = 162,                   /* @15  */
-  YYSYMBOL_tree = 163,                     /* tree  */
-  YYSYMBOL_sscanf = 164,                   /* sscanf  */
-  YYSYMBOL_parse_command = 165,            /* parse_command  */
-  YYSYMBOL_time_expression = 166,          /* time_expression  */
-  YYSYMBOL_167_16 = 167,                   /* @16  */
-  YYSYMBOL_lvalue_list = 168,              /* lvalue_list  */
+  YYSYMBOL_LOWER_THAN_ELSE = 53,           /* LOWER_THAN_ELSE  */
+  YYSYMBOL_54_ = 54,                       /* '?'  */
+  YYSYMBOL_55_ = 55,                       /* '|'  */
+  YYSYMBOL_56_ = 56,                       /* '^'  */
+  YYSYMBOL_57_ = 57,                       /* '&'  */
+  YYSYMBOL_58_ = 58,                       /* '<'  */
+  YYSYMBOL_59_ = 59,                       /* '+'  */
+  YYSYMBOL_60_ = 60,                       /* '-'  */
+  YYSYMBOL_61_ = 61,                       /* '*'  */
+  YYSYMBOL_62_ = 62,                       /* '%'  */
+  YYSYMBOL_63_ = 63,                       /* '/'  */
+  YYSYMBOL_64_ = 64,                       /* '!'  */
+  YYSYMBOL_65_ = 65,                       /* '~'  */
+  YYSYMBOL_66_ = 66,                       /* ';'  */
+  YYSYMBOL_67_ = 67,                       /* '('  */
+  YYSYMBOL_68_ = 68,                       /* ')'  */
+  YYSYMBOL_69_ = 69,                       /* '{'  */
+  YYSYMBOL_70_ = 70,                       /* '}'  */
+  YYSYMBOL_71_ = 71,                       /* ','  */
+  YYSYMBOL_72_ = 72,                       /* ':'  */
+  YYSYMBOL_73_ = 73,                       /* '$'  */
+  YYSYMBOL_74_ = 74,                       /* '.'  */
+  YYSYMBOL_75_ = 75,                       /* '['  */
+  YYSYMBOL_76_ = 76,                       /* ']'  */
+  YYSYMBOL_YYACCEPT = 77,                  /* $accept  */
+  YYSYMBOL_loop_start = 78,                /* loop_start  */
+  YYSYMBOL_foreach_start = 79,             /* foreach_start  */
+  YYSYMBOL_block_start = 80,               /* block_start  */
+  YYSYMBOL_special_context_start = 81,     /* special_context_start  */
+  YYSYMBOL_dollar_start = 82,              /* dollar_start  */
+  YYSYMBOL_all = 83,                       /* all  */
+  YYSYMBOL_program = 84,                   /* program  */
+  YYSYMBOL_opt_semicolon = 85,             /* opt_semicolon  */
+  YYSYMBOL_def = 86,                       /* def  */
+  YYSYMBOL_function = 87,                  /* function  */
+  YYSYMBOL_88_1 = 88,                      /* @1  */
+  YYSYMBOL_89_2 = 89,                      /* @2  */
+  YYSYMBOL_block_or_semi = 90,             /* block_or_semi  */
+  YYSYMBOL_statement = 91,                 /* statement  */
+  YYSYMBOL_stmt_return = 92,               /* stmt_return  */
+  YYSYMBOL_stmt_cond = 93,                 /* stmt_cond  */
+  YYSYMBOL_optional_else_part = 94,        /* optional_else_part  */
+  YYSYMBOL_stmt_while = 95,                /* stmt_while  */
+  YYSYMBOL_stmt_do = 96,                   /* stmt_do  */
+  YYSYMBOL_stmt_for = 97,                  /* stmt_for  */
+  YYSYMBOL_stmt_foreach = 98,              /* stmt_foreach  */
+  YYSYMBOL_stmt_switch = 99,               /* stmt_switch  */
+  YYSYMBOL_block = 100,                    /* block  */
+  YYSYMBOL_statements = 101,               /* statements  */
+  YYSYMBOL_local_decl_statement_header = 102, /* local_decl_statement_header  */
+  YYSYMBOL_local_declaration_statement = 103, /* local_declaration_statement  */
+  YYSYMBOL_local_decl_header = 104,        /* local_decl_header  */
+  YYSYMBOL_local_declarations = 105,       /* local_declarations  */
+  YYSYMBOL_comma_expr = 106,               /* comma_expr  */
+  YYSYMBOL_expr = 107,                     /* expr  */
+  YYSYMBOL_lvalue = 108,                   /* lvalue  */
+  YYSYMBOL_primary_expr = 109,             /* primary_expr  */
+  YYSYMBOL_call_open = 110,                /* call_open  */
+  YYSYMBOL_function_call = 111,            /* function_call  */
+  YYSYMBOL_sscanf = 112,                   /* sscanf  */
+  YYSYMBOL_parse_command = 113,            /* parse_command  */
+  YYSYMBOL_catch = 114,                    /* catch  */
+  YYSYMBOL_time_expression = 115,          /* time_expression  */
+  YYSYMBOL_tree = 116,                     /* tree  */
+  YYSYMBOL_switch_header = 117,            /* switch_header  */
+  YYSYMBOL_switch_block = 118,             /* switch_block  */
+  YYSYMBOL_case = 119,                     /* case  */
+  YYSYMBOL_case_label = 120,               /* case_label  */
+  YYSYMBOL_for_expr = 121,                 /* for_expr  */
+  YYSYMBOL_for_init = 122,                 /* for_init  */
+  YYSYMBOL_foreach_var = 123,              /* foreach_var  */
+  YYSYMBOL_foreach_vars = 124,             /* foreach_vars  */
+  YYSYMBOL_type_decl = 125,                /* type_decl  */
+  YYSYMBOL_class_header = 126,             /* class_header  */
+  YYSYMBOL_member_list = 127,              /* member_list  */
+  YYSYMBOL_128_3 = 128,                    /* $@3  */
+  YYSYMBOL_member_name_list = 129,         /* member_name_list  */
+  YYSYMBOL_member_name = 130,              /* member_name  */
+  YYSYMBOL_class_init = 131,               /* class_init  */
+  YYSYMBOL_opt_class_init = 132,           /* opt_class_init  */
+  YYSYMBOL_type = 133,                     /* type  */
+  YYSYMBOL_type_modifier_list = 134,       /* type_modifier_list  */
+  YYSYMBOL_opt_basic_type = 135,           /* opt_basic_type  */
+  YYSYMBOL_basic_type = 136,               /* basic_type  */
+  YYSYMBOL_opt_atomic_type = 137,          /* opt_atomic_type  */
+  YYSYMBOL_atomic_type = 138,              /* atomic_type  */
+  YYSYMBOL_arg_type = 139,                 /* arg_type  */
+  YYSYMBOL_cast = 140,                     /* cast  */
+  YYSYMBOL_optional_star = 141,            /* optional_star  */
+  YYSYMBOL_identifier = 142,               /* identifier  */
+  YYSYMBOL_new_local_name = 143,           /* new_local_name  */
+  YYSYMBOL_efun_override = 144,            /* efun_override  */
+  YYSYMBOL_function_name = 145,            /* function_name  */
+  YYSYMBOL_inheritance = 146,              /* inheritance  */
+  YYSYMBOL_modifier_change = 147,          /* modifier_change  */
+  YYSYMBOL_argument = 148,                 /* argument  */
+  YYSYMBOL_argument_list = 149,            /* argument_list  */
+  YYSYMBOL_param_decl = 150,               /* param_decl  */
+  YYSYMBOL_optional_default_arg_value = 151, /* optional_default_arg_value  */
+  YYSYMBOL_local_name_list = 152,          /* local_name_list  */
+  YYSYMBOL_new_local_def = 153,            /* new_local_def  */
+  YYSYMBOL_single_new_local_def = 154,     /* single_new_local_def  */
+  YYSYMBOL_single_new_local_def_with_init = 155, /* single_new_local_def_with_init  */
+  YYSYMBOL_name_list = 156,                /* name_list  */
+  YYSYMBOL_new_name = 157,                 /* new_name  */
+  YYSYMBOL_lambda_return_type = 158,       /* lambda_return_type  */
+  YYSYMBOL_functional_open = 159,          /* functional_open  */
+  YYSYMBOL_assoc_pair = 160,               /* assoc_pair  */
+  YYSYMBOL_spread_expr = 161,              /* spread_expr  */
+  YYSYMBOL_arg_list = 162,                 /* arg_list  */
+  YYSYMBOL_opt_arg_list = 163,             /* opt_arg_list  */
+  YYSYMBOL_pair_list = 164,                /* pair_list  */
+  YYSYMBOL_opt_pair_list = 165,            /* opt_pair_list  */
+  YYSYMBOL_lvalue_list = 166,              /* lvalue_list  */
+  YYSYMBOL_expr_or_block = 167,            /* expr_or_block  */
+  YYSYMBOL_ref = 168,                      /* ref  */
   YYSYMBOL_string = 169,                   /* string  */
-  YYSYMBOL_string_con1 = 170,              /* string_con1  */
-  YYSYMBOL_string_con2 = 171,              /* string_con2  */
-  YYSYMBOL_class_init = 172,               /* class_init  */
-  YYSYMBOL_opt_class_init = 173,           /* opt_class_init  */
-  YYSYMBOL_function_call = 174,            /* function_call  */
-  YYSYMBOL_175_17 = 175,                   /* @17  */
-  YYSYMBOL_176_18 = 176,                   /* @18  */
-  YYSYMBOL_177_19 = 177,                   /* @19  */
-  YYSYMBOL_178_20 = 178,                   /* @20  */
-  YYSYMBOL_179_21 = 179,                   /* @21  */
-  YYSYMBOL_180_22 = 180,                   /* @22  */
-  YYSYMBOL_181_23 = 181,                   /* @23  */
-  YYSYMBOL_efun_override = 182,            /* efun_override  */
-  YYSYMBOL_function_name = 183,            /* function_name  */
-  YYSYMBOL_cond = 184,                     /* cond  */
-  YYSYMBOL_optional_else_part = 185        /* optional_else_part  */
+  YYSYMBOL_template_literal = 170,         /* template_literal  */
+  YYSYMBOL_template_parts = 171,           /* template_parts  */
+  YYSYMBOL_string_like = 172,              /* string_like  */
+  YYSYMBOL_string_literal = 173,           /* string_literal  */
+  YYSYMBOL_string_const = 174,             /* string_const  */
+  YYSYMBOL_number = 175,                   /* number  */
+  YYSYMBOL_real = 176,                     /* real  */
+  YYSYMBOL_constant = 177                  /* constant  */
 };
 typedef enum yysymbol_kind_t yysymbol_kind_t;
 
@@ -566,13 +544,15 @@ void free (void *); /* INFRINGES ON USER NAME SPACE */
 
 #if (! defined yyoverflow \
      && (! defined __cplusplus \
-         || (defined YYSTYPE_IS_TRIVIAL && YYSTYPE_IS_TRIVIAL)))
+         || (defined YYLTYPE_IS_TRIVIAL && YYLTYPE_IS_TRIVIAL \
+             && defined YYSTYPE_IS_TRIVIAL && YYSTYPE_IS_TRIVIAL)))
 
 /* A type that is properly aligned for any stack member.  */
 union yyalloc
 {
   yy_state_t yyss_alloc;
   YYSTYPE yyvs_alloc;
+  YYLTYPE yyls_alloc;
 };
 
 /* The size of the maximum gap between one aligned stack and the next.  */
@@ -581,8 +561,9 @@ union yyalloc
 /* The size of an array large to enough to hold all stacks, each with
    N elements.  */
 # define YYSTACK_BYTES(N) \
-     ((N) * (YYSIZEOF (yy_state_t) + YYSIZEOF (YYSTYPE)) \
-      + YYSTACK_GAP_MAXIMUM)
+     ((N) * (YYSIZEOF (yy_state_t) + YYSIZEOF (YYSTYPE) \
+             + YYSIZEOF (YYLTYPE)) \
+      + 2 * YYSTACK_GAP_MAXIMUM)
 
 # define YYCOPY_NEEDED 1
 
@@ -627,19 +608,19 @@ union yyalloc
 /* YYFINAL -- State number of the termination state.  */
 #define YYFINAL  3
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   1805
+#define YYLAST   2078
 
 /* YYNTOKENS -- Number of terminals.  */
-#define YYNTOKENS  78
+#define YYNTOKENS  77
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  108
+#define YYNNTS  101
 /* YYNRULES -- Number of rules.  */
 #define YYNRULES  270
 /* YYNSTATES -- Number of states.  */
-#define YYNSTATES  511
+#define YYNSTATES  531
 
 /* YYMAXUTOK -- Last valid token kind.  */
-#define YYMAXUTOK   311
+#define YYMAXUTOK   308
 
 
 /* YYTRANSLATE(TOKEN-NUM) -- Symbol number corresponding to TOKEN-NUM
@@ -656,16 +637,16 @@ static const yytype_int8 yytranslate[] =
        0,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-       2,     2,     2,     2,     2,     2,    75,    65,    58,     2,
-      69,    70,    64,    62,    72,    63,     2,    66,     2,     2,
-       2,     2,     2,     2,     2,     2,     2,     2,    71,    68,
-      61,     2,     2,    55,     2,     2,     2,     2,     2,     2,
+       2,     2,     2,    64,     2,     2,    73,    62,    57,     2,
+      67,    68,    61,    59,    71,    60,    74,    63,     2,     2,
+       2,     2,     2,     2,     2,     2,     2,     2,    72,    66,
+      58,     2,     2,    54,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-       2,    76,     2,    77,    57,     2,     2,     2,     2,     2,
+       2,    75,     2,    76,    56,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-       2,     2,     2,    73,    56,    74,    67,     2,     2,     2,
+       2,     2,     2,    69,    55,    70,    65,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
@@ -683,42 +664,41 @@ static const yytype_int8 yytranslate[] =
       15,    16,    17,    18,    19,    20,    21,    22,    23,    24,
       25,    26,    27,    28,    29,    30,    31,    32,    33,    34,
       35,    36,    37,    38,    39,    40,    41,    42,    43,    44,
-      45,    46,    47,    48,    49,    50,    51,    52,    53,    54,
-      59,    60
+      45,    46,    47,    48,    49,    50,    51,    52,    53
 };
 
 #if YYDEBUG
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,   217,   217,   221,   222,   225,   227,   231,   235,   239,
-     243,   244,   248,   255,   256,   260,   261,   265,   266,   265,
-     271,   272,   278,   279,   280,   284,   301,   314,   315,   318,
-     320,   320,   325,   325,   330,   331,   341,   342,   351,   359,
-     360,   364,   365,   369,   370,   374,   375,   396,   402,   410,
-     423,   427,   428,   446,   457,   471,   474,   491,   499,   506,
-     508,   514,   515,   519,   544,   600,   599,   608,   608,   608,
-     612,   617,   616,   635,   646,   680,   691,   723,   728,   739,
-     738,   753,   757,   764,   771,   779,   791,   792,   793,   794,
-     795,   796,   801,   805,   827,   840,   839,   853,   852,   866,
-     865,   890,   911,   921,   938,   943,   954,   953,   973,   976,
-     980,   985,   994,   993,  1032,  1038,  1045,  1051,  1058,  1072,
-    1086,  1099,  1115,  1129,  1144,  1148,  1152,  1156,  1160,  1164,
-    1172,  1176,  1180,  1184,  1188,  1192,  1196,  1200,  1204,  1208,
-    1212,  1216,  1220,  1227,  1231,  1238,  1242,  1269,  1294,  1299,
-    1323,  1329,  1335,  1360,  1364,  1387,  1409,  1423,  1467,  1504,
-    1508,  1512,  1682,  1776,  1856,  1860,  1955,  1976,  1997,  2019,
-    2028,  2039,  2063,  2085,  2106,  2107,  2108,  2109,  2110,  2111,
-    2115,  2121,  2142,  2145,  2149,  2156,  2160,  2167,  2172,  2185,
-    2189,  2193,  2200,  2210,  2228,  2235,  2351,  2352,  2359,  2360,
-    2433,  2451,  2456,  2455,  2485,  2509,  2533,  2544,  2548,  2555,
-    2562,  2566,  2570,  2615,  2671,  2672,  2676,  2677,  2679,  2678,
-    2735,  2773,  2868,  2891,  2900,  2912,  2916,  2924,  2923,  2936,
-    2943,  2953,  2962,  2973,  2972,  2986,  2991,  3005,  3013,  3014,
-    3018,  3025,  3026,  3033,  3044,  3047,  3056,  3055,  3069,  3068,
-    3099,  3134,  3153,  3152,  3288,  3287,  3356,  3355,  3407,  3406,
-    3458,  3457,  3488,  3508,  3524,  3525,  3539,  3554,  3569,  3603,
-    3607
+       0,   243,   243,   244,   245,   246,   247,   256,   261,   262,
+     267,   268,   279,   280,   281,   282,   283,   306,   308,   305,
+     315,   316,   317,   327,   328,   329,   330,   331,   332,   333,
+     334,   335,   336,   337,   338,   344,   345,   350,   355,   356,
+     361,   367,   373,   379,   385,   397,   403,   405,   407,   409,
+     415,   419,   425,   429,   431,   450,   451,   455,   456,   457,
+     459,   460,   461,   462,   464,   465,   466,   468,   469,   470,
+     472,   474,   481,   482,   483,   484,   486,   487,   488,   489,
+     490,   492,   494,   495,   496,   497,   498,   499,   504,   513,
+     514,   515,   516,   517,   518,   519,   520,   523,   527,   528,
+     533,   535,   537,   542,   544,   546,   548,   550,   552,   554,
+     556,   558,   561,   563,   568,   575,   577,   586,   588,   590,
+     594,   595,   605,   618,   620,   622,   624,   626,   628,   630,
+     632,   634,   645,   651,   657,   663,   669,   671,   682,   688,
+     689,   690,   696,   698,   700,   702,   704,   711,   712,   722,
+     723,   728,   730,   736,   737,   738,   743,   745,   756,   762,
+     768,   769,   769,   775,   776,   781,   786,   791,   792,   804,
+     809,   810,   815,   816,   821,   822,   827,   828,   833,   834,
+     835,   840,   841,   846,   851,   852,   862,   863,   868,   869,
+     874,   875,   885,   886,   887,   888,   893,   899,   909,   911,
+     912,   918,   920,   930,   932,   934,   940,   941,   946,   948,
+     954,   956,   962,   968,   979,   980,   985,   986,   997,  1005,
+    1015,  1020,  1021,  1026,  1028,  1035,  1036,  1037,  1042,  1044,
+    1051,  1052,  1053,  1058,  1059,  1064,  1065,  1070,  1071,  1081,
+    1093,  1097,  1098,  1107,  1108,  1109,  1110,  1117,  1118,  1124,
+    1125,  1126,  1130,  1134,  1140,  1141,  1142,  1143,  1144,  1145,
+    1146,  1147,  1148,  1149,  1150,  1151,  1152,  1153,  1154,  1155,
+    1156
 };
 #endif
 
@@ -736,51 +716,53 @@ yysymbol_name (yysymbol_kind_t yysymbol)
   static const char *const yy_sname[] =
   {
   "end of file", "error", "invalid token", "L_STRING", "L_NUMBER",
-  "L_REAL", "L_BASIC_TYPE", "L_TYPE_MODIFIER", "L_DEFINED_NAME",
-  "L_IDENTIFIER", "L_EFUN", "L_INC", "L_DEC", "L_ASSIGN", "L_LAND",
-  "L_LOR", "L_LSH", "L_RSH", "L_ORDER", "L_NOT", "L_IF", "L_ELSE",
+  "L_REAL", "L_TEMPLATE_HEAD", "L_TEMPLATE_MIDDLE", "L_TEMPLATE_TAIL",
+  "L_BASIC_TYPE", "L_TYPE_MODIFIER", "L_DEFINED_NAME", "L_IDENTIFIER",
+  "L_EFUN", "L_INC_DEC", "L_ASSIGN", "L_LAND", "L_LOR",
+  "L_QUESTION_QUESTION", "L_SHIFT", "L_EQ_NE", "L_ORDER", "L_IF", "L_ELSE",
   "L_SWITCH", "L_CASE", "L_DEFAULT", "L_RANGE", "L_DOT_DOT_DOT", "L_WHILE",
   "L_DO", "L_FOR", "L_FOREACH", "L_IN", "L_BREAK", "L_CONTINUE",
-  "L_RETURN", "L_ARROW", "L_DOT", "L_INHERIT", "L_COLON_COLON",
-  "L_ARRAY_OPEN", "L_MAPPING_OPEN", "L_FUNCTION_OPEN",
-  "L_NEW_FUNCTION_OPEN", "L_SSCANF", "L_CATCH", "L_ARRAY", "L_REF",
-  "L_PARSE_COMMAND", "L_TIME_EXPRESSION", "L_CLASS", "L_NEW",
-  "L_PARAMETER", "L_TREE", "L_PREPROCESSOR_COMMAND", "LOWER_THAN_ELSE",
-  "'?'", "'|'", "'^'", "'&'", "L_EQ", "L_NE", "'<'", "'+'", "'-'", "'*'",
-  "'%'", "'/'", "'~'", "';'", "'('", "')'", "':'", "','", "'{'", "'}'",
-  "'$'", "'['", "']'", "$accept", "all", "program", "possible_semi_colon",
-  "inheritance", "real", "number", "optional_star", "block_or_semi",
-  "identifier", "function", "$@1", "@2", "def", "modifier_change",
-  "member_name", "member_name_list", "member_list", "$@3", "type_decl",
-  "@4", "new_local_name", "atomic_type", "opt_atomic_type", "basic_type",
-  "arg_type", "optional_default_arg_value", "new_arg", "argument",
-  "argument_list", "type_modifier_list", "type", "cast", "opt_basic_type",
-  "name_list", "new_name", "block", "@5", "decl_block",
-  "local_declarations", "$@6", "new_local_def", "single_new_local_def",
-  "single_new_local_def_with_init", "local_name_list",
-  "local_declaration_statement", "$@7", "block_statements", "statement",
-  "while", "$@8", "do", "$@9", "for", "$@10", "foreach_var",
-  "foreach_vars", "foreach", "$@11", "for_expr", "first_for_expr",
-  "switch", "$@12", "switch_block", "case", "case_label", "constant",
-  "comma_expr", "ref", "expr0", "return", "expr_list", "expr_list_node",
-  "expr_list2", "expr_list3", "expr_list4", "assoc_pair", "lvalue",
-  "l_new_function_open", "expr4", "@13", "@14", "expr_or_block", "catch",
-  "@15", "tree", "sscanf", "parse_command", "time_expression", "@16",
-  "lvalue_list", "string", "string_con1", "string_con2", "class_init",
-  "opt_class_init", "function_call", "@17", "@18", "@19", "@20", "@21",
-  "@22", "@23", "efun_override", "function_name", "cond",
-  "optional_else_part", YY_NULLPTR
+  "L_RETURN", "L_ARROW", "L_INHERIT", "L_COLON_COLON", "L_OPTIONAL_DOT",
+  "L_DOT_OPTIONAL", "L_FUNCTION_OPEN", "L_SSCANF", "L_CATCH", "L_ARRAY",
+  "L_REF", "L_PARSE_COMMAND", "L_TIME_EXPRESSION", "L_CLASS", "L_NEW",
+  "L_PARAMETER", "L_TREE", "LOWER_THAN_ELSE", "'?'", "'|'", "'^'", "'&'",
+  "'<'", "'+'", "'-'", "'*'", "'%'", "'/'", "'!'", "'~'", "';'", "'('",
+  "')'", "'{'", "'}'", "','", "':'", "'$'", "'.'", "'['", "']'", "$accept",
+  "loop_start", "foreach_start", "block_start", "special_context_start",
+  "dollar_start", "all", "program", "opt_semicolon", "def", "function",
+  "@1", "@2", "block_or_semi", "statement", "stmt_return", "stmt_cond",
+  "optional_else_part", "stmt_while", "stmt_do", "stmt_for",
+  "stmt_foreach", "stmt_switch", "block", "statements",
+  "local_decl_statement_header", "local_declaration_statement",
+  "local_decl_header", "local_declarations", "comma_expr", "expr",
+  "lvalue", "primary_expr", "call_open", "function_call", "sscanf",
+  "parse_command", "catch", "time_expression", "tree", "switch_header",
+  "switch_block", "case", "case_label", "for_expr", "for_init",
+  "foreach_var", "foreach_vars", "type_decl", "class_header",
+  "member_list", "$@3", "member_name_list", "member_name", "class_init",
+  "opt_class_init", "type", "type_modifier_list", "opt_basic_type",
+  "basic_type", "opt_atomic_type", "atomic_type", "arg_type", "cast",
+  "optional_star", "identifier", "new_local_name", "efun_override",
+  "function_name", "inheritance", "modifier_change", "argument",
+  "argument_list", "param_decl", "optional_default_arg_value",
+  "local_name_list", "new_local_def", "single_new_local_def",
+  "single_new_local_def_with_init", "name_list", "new_name",
+  "lambda_return_type", "functional_open", "assoc_pair", "spread_expr",
+  "arg_list", "opt_arg_list", "pair_list", "opt_pair_list", "lvalue_list",
+  "expr_or_block", "ref", "string", "template_literal", "template_parts",
+  "string_like", "string_literal", "string_const", "number", "real",
+  "constant", YY_NULLPTR
   };
   return yy_sname[yysymbol];
 }
 #endif
 
-#define YYPACT_NINF (-432)
+#define YYPACT_NINF (-410)
 
 #define yypact_value_is_default(Yyn) \
   ((Yyn) == YYPACT_NINF)
 
-#define YYTABLE_NINF (-265)
+#define YYTABLE_NINF (-233)
 
 #define yytable_value_is_error(Yyn) \
   0
@@ -789,58 +771,60 @@ yysymbol_name (yysymbol_kind_t yysymbol)
    STATE-NUM.  */
 static const yytype_int16 yypact[] =
 {
-    -432,    35,    48,  -432,    47,  -432,  -432,    -7,  -432,  -432,
-     137,     4,  -432,  -432,  -432,  -432,    28,   179,  -432,    53,
-     153,  -432,  -432,  -432,   225,   135,   145,  -432,    28,   181,
-     245,   192,   207,   210,  -432,  -432,  -432,     3,  -432,     4,
-      79,    28,  -432,  -432,  -432,  1661,   238,   225,  -432,  -432,
-    -432,  -432,   299,  -432,  -432,   281,     9,    90,   292,   276,
-     276,  1661,   225,  1148,   554,  1661,  -432,   278,  -432,  -432,
-     284,  -432,   322,  -432,   127,  1661,  1661,   927,   330,  -432,
-    -432,   362,  1661,   276,  1335,   298,   253,   126,  -432,  -432,
-    -432,  -432,  -432,  -432,   245,  -432,   333,   334,   175,   388,
-      21,  1661,   225,   335,  -432,   147,  1223,  -432,   129,  -432,
-    -432,  -432,  1262,   337,  -432,   350,   893,   329,   352,  -432,
-     262,  1335,   333,  1661,   178,  1661,   178,   376,  1661,  -432,
-    -432,  -432,  -432,   104,   361,  1661,     4,   -26,  -432,   225,
-    -432,  -432,  1661,  1661,  1661,  1661,  1661,  1661,  1661,  1661,
-    1661,  1661,  1661,  1661,  1661,  1661,  1661,  1661,  1661,  -432,
-    -432,  1661,   357,  1661,   225,   225,  1296,  -432,  -432,  -432,
-    -432,  -432,   382,     4,  -432,   359,    19,  -432,  -432,  1335,
-    -432,   175,  1369,  -432,  -432,  -432,   363,  1073,  1661,   364,
-     629,   367,  1661,   444,  1661,  -432,  -432,   519,  -432,   366,
-    1369,    52,   704,  -432,  -432,   148,   370,  -432,  1661,  -432,
-    1406,   196,   234,   234,   212,   966,  1552,  1679,   320,   332,
-     332,   212,   112,   112,  -432,  -432,  -432,  1335,  -432,   305,
-     372,  -432,  1661,   144,  1369,  1369,  -432,   379,  -432,  -432,
-      44,     4,   387,   393,  -432,  -432,  1335,  -432,  -432,  -432,
-    1335,  1661,   218,  1661,  -432,  -432,   394,  -432,    16,   380,
-     397,   399,  -432,   400,   401,   368,   406,  1442,  -432,  -432,
-    -432,  -432,   704,   358,   704,  -432,  -432,  -432,  -432,  -432,
-     195,  -432,  -432,   403,  -432,   222,  1661,   405,  1661,  -432,
-     165,   404,   407,   408,   416,   360,    17,  -432,   225,   420,
-     409,   421,  -432,   594,  -432,  1113,   259,   270,  -432,   704,
-    1661,  1661,  1661,   854,  1000,   232,  -432,  -432,  -432,   200,
-       4,  -432,  -432,  -432,  -432,  -432,  -432,  1335,  -432,  1369,
-     479,  -432,  1661,  -432,    75,  -432,  -432,  -432,   452,  -432,
-    -432,  -432,  -432,  -432,  -432,     4,  -432,  -432,   276,   425,
-    1661,  -432,   225,  -432,  -432,   274,   286,   289,   469,     4,
-     484,  -432,  -432,   443,   440,  -432,  -432,  -432,   441,   483,
-    -432,   379,   456,   447,  1369,   454,  1661,  -432,    91,   155,
-    -432,  1369,  1661,  -432,   460,  -432,   594,   467,  -432,   854,
-    -432,  -432,   470,   379,  1661,  1515,   232,  1661,   528,     4,
-    -432,   473,  -432,   159,  -432,  -432,   474,   318,  -432,   475,
-    1661,   526,   476,   854,  1661,  -432,  1335,   482,  -432,  1039,
-    1661,  -432,  -432,  -432,  -432,   481,  -432,  1335,   854,  -432,
-    -432,  -432,   290,  1588,  -432,  1335,  -432,  -432,    50,   485,
-     491,   854,    63,   496,  -432,   779,  -432,  -432,  -432,  -432,
-     548,   132,   564,   565,   132,    18,  1479,   508,  -432,     4,
-     779,   497,   779,   854,  -432,   501,  -432,  -432,  1187,    60,
-    -432,   156,   156,   156,   156,   156,   156,   156,   156,   156,
-     156,   156,   156,   156,   156,   518,  -432,  -432,  -432,  -432,
-    -432,  -432,  -432,   516,   156,   240,   240,   355,  1625,  1698,
-    1709,  1412,  1412,   355,   257,   257,  -432,  -432,  -432,  -432,
-    -432
+    -410,    65,   123,  -410,   118,    68,  -410,  -410,  -410,    84,
+      59,  -410,  -410,  -410,  -410,  -410,    29,  -410,   213,   147,
+     160,  -410,     3,   229,  -410,  -410,  -410,   204,   227,   361,
+    -410,  -410,  -410,  -410,    39,  -410,    84,  -410,     3,   283,
+     155,   248,   267,   275,  -410,  -410,  -410,    84,  1635,   342,
+     213,  -410,    71,  -410,     3,  -410,  -410,   317,   349,   213,
+     396,  -410,  -410,  1635,   389,     0,   109,   398,   279,   213,
+    1700,   385,  -410,  -410,   391,  -410,   392,  -410,   -46,  -410,
+    1635,  1635,  1635,   714,   400,  2015,   373,   182,  -410,  -410,
+    -410,  -410,  -410,  -410,  1635,   401,   407,   407,   413,   322,
+     279,  -410,  -410,   113,   283,  -410,  -410,    13,   466,  -410,
+    -410,  -410,    84,  -410,  1635,  1829,   213,  -410,  1280,   103,
+     787,  -410,   164,  -410,   270,   341,  2015,   407,  1635,   -26,
+    1635,   -26,   435,  1280,  1635,  -410,  -410,  -410,  -410,  -410,
+     149,  1635,  1351,   566,   132,    84,  -410,  1635,  1635,  1635,
+    1635,  1635,  1635,  1635,  1635,  1635,  1635,  1635,  1635,  1635,
+    1635,  1635,  1635,  -410,  1635,   213,    17,   415,   213,  1144,
+    -410,   213,  1280,  1280,    13,  1635,   421,  -410,  -410,  -410,
+    -410,  -410,    -2,    84,  -410,   424,     6,  -410,  -410,  2015,
+    1635,  -410,  -410,  -410,  2002,  -410,   428,   432,  -410,  -410,
+    1635,   434,  1635,   464,  1887,  1635,  -410,  -410,  1906,  -410,
+     404,   465,   141,   860,   212,   471,  1839,  -410,   477,   461,
+    -410,   483,  1635,   452,   682,   608,   288,   458,   192,  1858,
+     340,   534,   615,   192,   199,   199,  -410,  -410,  -410,  2015,
+     407,  1635,  -410,  1635,  -410,   500,  1635,    42,  -410,   495,
+     496,   498,   346,  -410,  -410,   414,  -410,  -410,   218,  1829,
+    -410,  1209,  -410,   379,  -410,  2015,  -410,  1635,   216,  1635,
+    -410,  -410,  -410,  -410,    30,   506,   507,   509,  -410,   514,
+     523,   540,   545,  1422,  -410,   860,  -410,  -410,  -410,  -410,
+    -410,  -410,  -410,  -410,   537,    84,   860,   176,   546,  -410,
+     407,   551,  1635,   640,   552,  -410,   272,  1635,  1280,   187,
+     200,  1635,   108,   418,   407,  -410,  -410,   553,  1635,   564,
+     549,    25,  -410,  -410,  -410,   569,  1935,  -410,  1954,   285,
+     286,   860,  1635,  1635,  1635,  1002,  1073,   224,  -410,  -410,
+    -410,   208,  -410,  -410,   414,   572,   576,  -410,  -410,  -410,
+    1280,  -410,  2015,  -410,  -410,  -410,  2015,   580,  -410,  -410,
+     243,   492,  -410,  1635,  -410,   249,  1280,  -410,  -410,   598,
+    -410,  -410,  -410,  -410,  -410,  -410,   279,   582,  1635,  -410,
+     213,  -410,  -410,   299,   300,   313,   626,   585,  -410,   591,
+      84,   643,  -410,  -410,  -410,   588,   627,  -410,  -410,   646,
+    -410,    84,   168,   594,  -410,  -410,  1635,  -410,   256,  1758,
+     257,  -410,   604,  1635,   609,  -410,  1935,  -410,   613,  1002,
+    -410,  -410,   614,  1493,   414,  1635,   224,  1635,  1635,  -410,
+      45,   617,    84,   931,  -410,  -410,   263,  1768,  -410,  -410,
+    -410,  -410,   384,  -410,   625,  1635,   671,  1002,  1635,   629,
+    -410,  2015,  -410,  1983,  2015,  -410,    82,   692,   695,   702,
+      82,    26,   652,   467,  -410,   648,   931,   642,   931,  -410,
+    -410,   653,  -410,  2015,  1002,  -410,  -410,   314,  1564,  -410,
+     650,  -410,  -410,  -410,   386,    60,  -410,    15,    15,    15,
+      15,    15,    15,    15,    15,    15,    15,    15,    15,  -410,
+    -410,  -410,  -410,  -410,  -410,   658,   661,  1002,  -410,  -410,
+    -410,   659,    15,   303,   748,   316,   526,   541,   689,   316,
+     329,   329,  -410,  -410,  -410,  -410,  -410,  -410,  -410,  1002,
+    -410
 };
 
 /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
@@ -848,90 +832,92 @@ static const yytype_int16 yypact[] =
    means the default is an error.  */
 static const yytype_int16 yydefact[] =
 {
-       4,     0,    55,     1,    55,    22,    20,     5,    24,    23,
-      60,    10,    56,     6,     3,    36,     0,     0,    25,    41,
-       0,    59,    57,    11,     0,     0,    61,   241,     0,     0,
-     238,    37,    38,     0,    42,    15,    16,    63,    21,    10,
-       0,     0,     7,   242,    32,     0,     0,     0,    62,   239,
-     240,    29,     0,     9,     8,   218,   199,   200,     0,     0,
-       0,     0,     0,     0,     0,     0,   196,     0,   227,   145,
-       0,   233,     0,   201,     0,     0,     0,     0,     0,   179,
-     178,     0,     0,     0,    64,     0,     0,   174,   216,   217,
-     175,   176,   177,   214,   237,   198,     0,     0,    40,    63,
-      40,     0,     0,     0,   252,     0,     0,   167,   195,   168,
-     169,   265,   185,     0,   187,   183,     0,     0,   190,   192,
-       0,   143,   197,     0,     0,     0,     0,   248,     0,    65,
-     229,   171,   170,    36,     0,     0,    10,     0,   202,     0,
-     166,   146,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,     0,     0,     0,     0,     0,     0,     0,   172,
-     173,     0,     0,     0,     0,     0,     0,   246,   254,    35,
-      34,    49,    43,    10,    53,     0,    51,    33,    30,   148,
-     266,    40,     0,   263,   262,   186,     0,     0,     0,     0,
-       0,     0,     0,     0,     0,   225,   228,     0,   234,     0,
-       0,     0,     0,    37,    38,     0,     0,   215,     0,   267,
-     151,   150,   159,   160,   157,     0,   152,   153,   154,   155,
-     156,   158,   161,   162,   163,   164,   165,   147,   220,     0,
-     204,   205,     0,     0,     0,     0,    44,    47,    18,    52,
-      40,    10,     0,     0,   224,   188,   194,   223,   193,   222,
-     144,     0,     0,     0,   244,   244,     0,   230,     0,     0,
-       0,     0,    97,     0,     0,     0,     0,     0,    92,    79,
-      67,    91,     0,     0,     0,    87,    88,    68,    69,    89,
-       0,    90,    86,     0,    58,     0,     0,     0,     0,   258,
-       0,     0,   213,     0,     0,    45,     0,    54,     0,    27,
-       0,     0,   253,   235,   226,     0,     0,     0,   249,     0,
-       0,     0,     0,     0,     0,    40,    93,    94,   180,     0,
-      10,    83,    66,    82,    85,   260,   203,   149,   221,     0,
-       0,   212,     0,   210,     0,   256,   247,   255,     0,    48,
-      14,    13,    19,    12,    26,    10,    31,   219,     0,     0,
-       0,   250,     0,   251,    84,     0,     0,     0,     0,    10,
-       0,   111,   110,     0,   109,   101,   103,   102,   104,     0,
-     181,     0,    77,     0,     0,     0,     0,   211,     0,     0,
-     206,     0,     0,    28,   235,   231,   235,     0,   245,     0,
-     112,    95,     0,     0,     0,     0,    40,     0,    73,    10,
-      80,     0,   259,     0,   207,   209,     0,     0,   236,     0,
-       0,   269,     0,     0,     0,    75,    76,     0,   105,     0,
-       0,    78,   261,   208,   257,     0,   232,   243,     0,   268,
-      70,    96,     0,     0,   106,    74,    46,   270,    40,     0,
-       0,     0,     0,     0,    71,     0,    98,    99,   107,   139,
-       0,     0,     0,     0,     0,     0,   122,   123,   121,    10,
-       0,     0,     0,     0,   141,     0,   140,   142,     0,     0,
-     117,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,     0,     0,     0,     0,   115,   113,   114,   100,
-     120,   138,   119,     0,     0,   131,   132,   129,   124,   125,
-     126,   127,   128,   130,   133,   134,   135,   136,   137,    72,
-     118
+       9,     0,   170,     1,   170,    10,    12,    15,   160,   184,
+     173,    14,    16,   171,    11,     8,   177,   185,     0,     0,
+     214,   178,     0,     0,   197,   169,   172,     0,   174,     0,
+     158,   161,   186,   187,   216,    13,   184,   247,     0,   249,
+       0,   179,   180,     0,   175,   179,   180,   184,     0,     0,
+       0,   215,     0,   248,     0,   196,   159,     0,   163,     0,
+       0,   252,   253,     0,   218,    90,    91,     0,     0,     0,
+       0,     0,     5,   237,     0,     5,     0,    92,     0,   238,
+       0,     0,     0,     0,     0,   217,     0,    82,    89,    83,
+      84,    95,    85,    96,     0,     0,     0,     0,     0,     0,
+       0,   243,   244,    93,   239,    86,    87,   177,   216,   250,
+     251,   162,   184,   165,     0,     0,     0,   122,     0,     0,
+       0,    77,    88,   193,    90,     0,    55,   219,     0,     0,
+       0,     0,   122,     0,     0,     4,   136,    80,    78,    79,
+     178,     0,     0,     0,     0,   184,     6,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,    81,     0,     0,     0,     0,     0,     0,
+      76,     0,     0,     0,   177,     0,     0,    57,   245,   246,
+     189,   188,   181,   184,   205,     0,   199,   201,   164,    59,
+       0,   241,   240,   194,   221,   223,   226,     0,   191,   190,
+       0,     0,     0,     0,     0,     0,   235,   134,     0,   135,
+       0,     0,     0,     0,     0,     0,     0,   228,   231,     0,
+      94,     0,     0,    63,    62,    61,    70,    67,    68,     0,
+      64,    65,    66,    69,    71,    72,    73,    74,    75,    58,
+      98,     0,   100,     0,    99,     0,     0,     0,   195,     0,
+       0,     0,     0,   115,   182,   203,    18,   200,   177,     0,
+     222,     0,   127,     0,   117,    56,   119,     0,     0,     0,
+     167,   167,   124,   137,     0,     0,     0,     0,     2,     0,
+       0,     0,     0,     0,    32,     0,    30,    24,    25,    26,
+      27,    28,    29,    31,     0,   184,     0,     0,     0,    50,
+       0,     0,     0,     0,     0,   183,     0,     0,     0,     0,
+       0,     0,     0,     0,   103,   123,   128,     0,     0,     0,
+     206,     0,   202,   242,   224,     0,   233,   236,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,   177,    33,    34,
+      35,     0,    47,    45,     0,     0,   208,    48,    23,    53,
+       0,   121,   220,   229,   120,    97,    60,     0,   101,   102,
+       0,     0,   104,     0,   109,     0,     0,   114,   116,     0,
+     204,    22,    21,    19,    20,   118,     0,     0,     0,   125,
+       0,   126,    49,     0,     0,     0,     0,   150,   151,     0,
+     184,     0,   152,   153,   155,   156,     0,   154,    36,   210,
+      51,   184,   177,     0,   130,   111,     0,   110,     0,    55,
+       0,   105,     0,     0,   233,   132,   233,   168,     0,     0,
+     138,     2,     0,     0,     0,     0,   177,     0,     0,   209,
+       0,     0,   184,     0,    52,   131,     0,    55,   106,   113,
+     108,   129,     0,   234,     0,     0,    38,     0,     0,     0,
+     212,   213,   157,     0,   211,   267,     0,     0,     0,     0,
+       0,     0,   148,   147,   146,     0,     0,     0,     0,   107,
+     112,     0,   133,   166,     0,    37,    40,     0,     0,     3,
+       0,   268,   269,   270,     0,     0,   142,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,    54,
+     140,    44,   139,   207,    39,     0,     0,     0,   145,   266,
+     144,     0,     0,   260,   257,   258,   254,   255,   256,   259,
+     261,   262,   263,   264,   265,    41,     2,    43,   143,     0,
+      42
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int16 yypgoto[] =
 {
-    -432,  -432,  -432,  -432,  -432,  -432,  -432,    -2,  -432,    15,
-    -432,  -432,  -432,  -432,  -432,  -432,   243,  -432,  -432,  -432,
-    -432,  -227,  -432,  -432,    -8,  -300,  -432,   349,   418,  -432,
-     586,  -432,  -432,  -432,   568,  -432,   -66,  -432,  -432,  -432,
-    -432,  -432,   300,  -432,  -388,  -432,  -432,  -223,  -256,  -432,
-    -432,  -432,  -432,  -432,  -432,   217,  -432,  -432,  -432,  -353,
-    -432,  -432,  -432,   -97,   177,  -431,  1311,   -41,   431,   -42,
-    -432,  -159,  -170,   453,  -432,  -432,   428,   -55,  -432,   -53,
-    -432,  -432,   493,  -432,  -432,  -432,  -432,  -432,  -432,  -432,
-     -20,  -432,   -15,   -16,  -432,   365,  -432,  -432,  -432,  -432,
-    -432,  -432,  -432,  -432,   557,  -432,  -432,  -432
+    -410,  -409,  -410,  -410,   655,  -410,  -410,  -410,  -410,  -410,
+    -410,  -410,  -410,  -410,  -248,  -410,  -410,  -410,  -410,  -410,
+    -410,  -410,  -410,   -71,   -94,  -410,  -410,  -410,  -410,   -68,
+       8,   -64,   -63,   -66,  -410,  -410,  -410,  -410,  -410,  -410,
+    -410,  -172,   330,  -356,  -383,  -410,   307,  -410,  -410,  -410,
+    -410,  -410,   622,  -410,  -410,   475,  -410,   731,  -410,    -7,
+    -410,  -410,  -323,  -410,    -1,    24,  -237,   666,  -410,  -410,
+    -410,   581,  -410,   510,  -410,  -280,  -410,   436,  -410,   718,
+    -410,  -410,  -410,   470,  -234,    32,  -122,  -410,  -410,  -357,
+     639,   595,   673,   677,   525,  -410,   -22,   -21,  -410,  -410,
+    -190
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int16 yydefgoto[] =
 {
-       0,     1,     2,    14,     5,    79,    80,   371,   342,    81,
-       6,    46,   296,     7,     8,   299,   300,   100,   241,     9,
-      51,   171,    19,    20,   172,   173,   339,   174,   175,   176,
-      10,    11,    82,    22,    25,    26,   270,   202,   271,   438,
-     459,   372,   367,   361,   373,   272,   320,   273,   274,   275,
-     413,   276,   313,   277,   463,   368,   369,   278,   441,   362,
-     363,   279,   412,   461,   462,   455,   456,   280,    83,   121,
-     281,   113,   114,   115,   117,   118,   119,    85,    86,    87,
-     208,   103,   196,    88,   124,    89,    90,    91,    92,   126,
-     349,    93,   457,    94,   388,   306,    95,   234,   200,   182,
-     235,   381,   329,   374,    96,    97,   282,   429
+       0,   335,   507,   213,   129,   222,     1,     2,    15,     5,
+       6,    49,   321,   373,   285,   286,   287,   475,   288,   289,
+     290,   291,   292,   293,   294,   295,   296,   432,   402,   297,
+     126,    86,    87,   118,    88,    89,    90,    91,    92,    93,
+     298,   467,   468,   461,   388,   389,   395,   396,     7,     8,
+      16,    47,    57,    58,   417,   329,     9,    10,    25,   182,
+      27,    28,   183,    94,   344,    95,   184,    96,    97,    11,
+      12,   185,   186,   187,   370,   345,   346,   397,   392,    19,
+      20,    98,    99,   217,   195,   196,   197,   218,   219,   377,
+     207,   100,   101,   102,   192,   103,   104,   462,   105,   106,
+     463
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
@@ -939,495 +925,551 @@ static const yytype_int16 yydefgoto[] =
    number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_int16 yytable[] =
 {
-      30,    29,    21,    84,   107,   109,   108,   108,   130,    24,
-     295,   421,    30,    40,   359,   359,    45,   245,   340,   110,
-     465,   112,   116,   243,   120,    30,    50,    15,   141,   101,
-     108,    27,    33,   131,   132,     3,   137,    47,   493,    37,
-     140,   256,   417,   469,   207,   239,   192,   -15,    -2,   321,
-      15,   323,   169,   170,     4,     4,    15,   358,   195,   179,
-     195,    13,    99,    27,   449,   137,    27,   449,    23,   136,
-     134,   485,   -17,   442,   443,   293,   294,   111,   104,   450,
-     440,   193,   450,   197,   309,   341,   354,   201,   451,   470,
-     129,   240,   178,   134,   205,   177,   359,    28,   -39,   134,
-     210,   211,   212,   213,   214,   215,   216,   217,   218,   219,
-     220,   221,   222,   223,   224,   225,   226,   180,   245,   227,
-     184,   112,   257,   452,   192,   233,   452,   453,   -16,   454,
-     453,   492,   454,   411,   206,    27,   449,  -195,  -195,  -195,
-     112,    41,   102,    15,   398,   112,   246,   192,   116,    49,
-     250,   450,   380,   252,   209,    35,    36,   431,   112,  -264,
-     449,   164,   165,   192,   164,   165,   415,   285,   404,   291,
-     375,   237,   437,  -218,    16,   450,   156,   157,   158,   230,
-     231,    15,   -40,   169,   170,   448,    17,    31,    32,   460,
-     330,   290,   112,   112,   269,   452,   128,   183,    34,   453,
-     129,   454,   166,    38,   460,   166,   460,   489,    18,   303,
-     142,   305,   144,   145,   146,   401,   192,    39,   283,   452,
-     192,   292,   406,   453,   134,   494,   319,   192,   144,   145,
-     343,   192,   405,    35,    36,   347,   423,   192,    15,   298,
-     365,   366,   331,    41,   327,   -50,   112,   194,    43,    42,
-     334,   129,   148,   149,   150,   151,   152,   153,   154,   155,
-     156,   157,   158,   324,   269,   -15,   269,   192,   370,   355,
-     356,   357,   192,   364,   154,   155,   156,   157,   158,    27,
-     -16,   134,    55,    44,    56,    57,    58,   112,   304,   378,
-     192,   379,   326,   384,   192,   108,   154,   155,   156,   157,
-     158,   269,   480,   481,   482,   483,   484,    98,   386,   159,
-     160,   161,   101,   344,    62,    63,    64,    65,    66,   102,
-      68,   482,   483,   484,   162,   163,    72,    73,    74,   351,
-     105,   352,   112,   191,   192,   403,   144,   145,   146,   112,
-     353,   407,   352,   298,   389,   106,   192,   123,   144,   145,
-     146,    78,   416,   125,   364,   419,   390,   393,   192,   391,
-     439,   192,   192,   486,   408,   488,   409,   387,   427,   203,
-     204,   471,   472,   432,   254,   255,   287,   288,   435,   151,
-     152,   153,   154,   155,   156,   157,   158,   169,   170,   425,
-     192,   127,   364,   153,   154,   155,   156,   157,   158,   138,
-     139,    45,   167,   168,   181,    52,   189,    27,    53,    54,
-      55,   186,    56,    57,    58,    59,    60,   480,   481,   482,
-     483,   484,   187,    61,   190,   199,    30,   228,    69,   238,
-     444,   338,   322,   244,   247,    30,   316,   249,    30,    40,
-     284,   289,    62,    63,    64,    65,    66,    67,    68,   310,
-      69,    70,    71,    30,    72,    73,    74,   301,   142,   143,
-     144,   145,   146,   302,   308,   332,   311,    75,   312,   314,
-     315,    76,   325,    77,   317,   328,   335,   346,   336,    78,
-      52,   333,    27,    53,    54,    55,   337,    56,    57,    58,
-      59,    60,   345,   382,   129,   385,   392,   394,    61,   147,
-     148,   149,   150,   151,   152,   153,   154,   155,   156,   157,
-     158,   395,   192,   396,   397,   400,   251,    62,    63,    64,
-      65,    66,    67,    68,   402,    69,    70,    71,   399,    72,
-      73,    74,   348,   142,   143,   144,   145,   146,   410,   414,
-     376,   420,    75,   422,   424,   426,    76,   428,    77,   430,
-     433,   436,   464,   446,    78,    52,   377,    27,    53,    54,
-      55,   447,    56,    57,    58,    59,    60,   458,   466,   467,
-      41,   487,   490,    61,   147,   148,   149,   150,   151,   152,
-     153,   154,   155,   156,   157,   158,   509,   510,   383,   297,
-      12,   253,    62,    63,    64,    65,    66,    67,    68,   242,
-      69,    70,    71,   236,    72,    73,    74,    48,   142,   143,
-     144,   145,   146,   418,   360,   445,   229,    75,   248,   198,
-     307,    76,   122,    77,     0,     0,     0,     0,     0,    78,
-      52,  -189,    27,    53,    54,    55,     0,    56,    57,    58,
-      59,    60,     0,     0,     0,     0,     0,     0,    61,   147,
-     148,   149,   150,   151,   152,   153,   154,   155,   156,   157,
-     158,     0,     0,     0,     0,     0,   348,    62,    63,    64,
-      65,    66,    67,    68,     0,    69,    70,    71,     0,    72,
-      73,    74,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,    75,     0,     0,     0,    76,     0,    77,     0,
-       0,     0,     0,     0,    78,   258,  -191,    27,    53,    54,
-     133,     0,    56,    57,    58,    59,    60,     0,     0,     0,
-       0,     0,     0,    61,   259,     0,   260,     0,     0,     0,
-       0,   261,   262,   263,   264,     0,   265,   266,   267,     0,
-       0,     0,    62,    63,    64,    65,    66,    67,    68,   -40,
-      69,    70,    71,   134,    72,    73,    74,     0,     0,     0,
-       0,     0,     0,     0,     0,     0,     0,    75,     0,     0,
-       0,    76,   268,    77,     0,     0,     0,   129,   -81,    78,
-      52,     0,    27,    53,    54,    55,     0,    56,    57,    58,
-      59,    60,     0,     0,     0,     0,     0,     0,    61,   259,
-       0,   260,   442,   443,     0,     0,   261,   262,   263,   264,
-       0,   265,   266,   267,     0,     0,     0,    62,    63,    64,
-      65,    66,    67,    68,     0,    69,    70,    71,     0,    72,
-      73,    74,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,    75,     0,     0,     0,    76,   268,    77,     0,
-       0,     0,   129,  -116,    78,    52,     0,    27,    53,    54,
-      55,     0,    56,    57,    58,    59,    60,     0,     0,     0,
-       0,     0,     0,    61,   259,     0,   260,     0,     0,     0,
-       0,   261,   262,   263,   264,     0,   265,   266,   267,     0,
-       0,     0,    62,    63,    64,    65,    66,    67,    68,     0,
-      69,    70,    71,     0,    72,    73,    74,   142,   143,   144,
-     145,   146,     0,     0,     0,     0,     0,    75,     0,     0,
-       0,    76,   268,    77,     0,     0,     0,   129,    52,    78,
-      27,    53,    54,   133,     0,    56,    57,    58,    59,    60,
-       0,     0,     0,     0,     0,     0,    61,     0,   147,   148,
-     149,   150,   151,   152,   153,   154,   155,   156,   157,   158,
-       0,     0,     0,     0,   188,    62,    63,    64,    65,    66,
-      67,    68,   -40,    69,    70,    71,   134,    72,    73,    74,
-     142,   143,   144,   145,   146,     0,     0,     0,     0,     0,
-      75,   135,     0,     0,    76,     0,    77,     0,     0,     0,
-       0,    52,    78,    27,    53,    54,   133,     0,    56,    57,
-      58,    59,    60,     0,     0,     0,     0,     0,     0,    61,
-       0,   147,   148,   149,   150,   151,   152,   153,   154,   155,
-     156,   157,   158,     0,     0,     0,     0,   286,    62,    63,
-      64,    65,    66,    67,    68,   -40,    69,    70,    71,   134,
-      72,    73,    74,   142,   143,   144,   145,   146,     0,     0,
-       0,     0,     0,    75,     0,     0,     0,    76,  -108,    77,
-       0,     0,     0,     0,    52,    78,    27,    53,    54,    55,
-       0,    56,    57,    58,    59,    60,     0,     0,     0,     0,
-       0,     0,    61,     0,   147,   148,   149,   150,   151,   152,
-     153,   154,   155,   156,   157,   158,     0,     0,     0,   434,
-       0,    62,    63,    64,    65,    66,    67,    68,     0,    69,
-      70,    71,     0,    72,    73,    74,     0,   142,   143,   144,
-     145,   146,     0,     0,     0,     0,    75,     0,     0,     0,
-      76,     0,    77,  -184,     0,     0,     0,  -184,    78,    52,
-       0,    27,    53,    54,    55,     0,    56,    57,    58,    59,
-      60,     0,     0,     0,     0,     0,     0,    61,   147,   148,
-     149,   150,   151,   152,   153,   154,   155,   156,   157,   158,
-       0,     0,     0,     0,     0,   350,    62,    63,    64,    65,
-      66,    67,    68,     0,    69,    70,    71,     0,    72,    73,
-      74,     0,     0,   471,   472,   473,     0,     0,     0,     0,
-       0,    75,     0,     0,     0,    76,     0,    77,     0,     0,
-       0,     0,  -182,    78,    52,     0,    27,    53,    54,    55,
-       0,    56,    57,    58,    59,    60,     0,     0,     0,     0,
-       0,     0,    61,   474,   475,   476,   477,   478,   479,   480,
-     481,   482,   483,   484,     0,     0,     0,   491,     0,     0,
-       0,    62,    63,    64,    65,    66,    67,    68,     0,    69,
-      70,    71,     0,    72,    73,    74,   142,   143,   144,   145,
-     146,     0,     0,     0,     0,     0,    75,   135,   185,     0,
-      76,     0,    77,     0,     0,     0,     0,    52,    78,    27,
-      53,    54,    55,     0,    56,    57,    58,    59,    60,     0,
-       0,     0,     0,     0,     0,    61,     0,   147,   148,   149,
-     150,   151,   152,   153,   154,   155,   156,   157,   158,     0,
-       0,     0,     0,     0,    62,    63,    64,    65,    66,    67,
-      68,     0,    69,    70,    71,     0,    72,    73,    74,   142,
-     143,   144,   145,   146,     0,     0,     0,   232,     0,    75,
-       0,     0,     0,    76,     0,    77,     0,     0,     0,     0,
-      52,    78,    27,    53,    54,    55,     0,    56,    57,    58,
-      59,    60,     0,     0,     0,     0,     0,     0,    61,     0,
-     147,   148,   149,   150,   151,   152,   153,   154,   155,   156,
-     157,   158,     0,     0,     0,     0,     0,    62,    63,    64,
-      65,    66,    67,    68,     0,    69,    70,    71,     0,    72,
-      73,    74,   144,   145,   146,     0,     0,     0,   471,   472,
-     473,     0,    75,     0,     0,     0,    76,     0,    77,  -182,
-       0,     0,     0,    52,    78,    27,    53,    54,    55,     0,
-      56,    57,    58,    59,    60,     0,     0,     0,     0,     0,
-       0,    61,   148,   149,   150,   151,   152,   153,   154,   155,
-     156,   157,   158,   479,   480,   481,   482,   483,   484,     0,
-      62,    63,    64,    65,    66,    67,    68,     0,    69,    70,
-      71,     0,    72,    73,    74,   471,   472,   473,     0,     0,
-       0,     0,     0,     0,     0,    75,     0,     0,     0,    76,
-     318,    77,     0,     0,     0,     0,    52,    78,    27,    53,
-      54,    55,     0,    56,    57,    58,    59,    60,     0,     0,
-       0,     0,     0,     0,    61,   474,   475,   476,   477,   478,
-     479,   480,   481,   482,   483,   484,     0,     0,     0,     0,
-       0,     0,     0,    62,    63,    64,    65,    66,    67,    68,
-       0,    69,    70,    71,     0,    72,    73,    74,   144,   145,
-     146,     0,     0,     0,     0,     0,     0,     0,    75,     0,
-       0,     0,    76,  -108,    77,     0,     0,     0,     0,    52,
-      78,    27,    53,    54,    55,     0,    56,    57,    58,    59,
-      60,     0,     0,     0,     0,     0,     0,    61,     0,   149,
-     150,   151,   152,   153,   154,   155,   156,   157,   158,     0,
-       0,     0,     0,     0,     0,     0,    62,    63,    64,    65,
-      66,    67,    68,     0,    69,    70,    71,     0,    72,    73,
-      74,   471,   472,   473,     0,     0,     0,     0,     0,     0,
-       0,    75,     0,     0,     0,    76,     0,    77,  -108,     0,
-       0,     0,    52,    78,    27,    53,    54,    55,     0,    56,
-      57,    58,    59,    60,     0,     0,     0,     0,     0,     0,
-      61,     0,   475,   476,   477,   478,   479,   480,   481,   482,
-     483,   484,     0,     0,     0,   144,   145,   146,     0,    62,
-      63,    64,    65,    66,    67,    68,     0,    69,    70,    71,
-       0,    72,    73,    74,   471,   472,   473,     0,     0,     0,
-       0,     0,     0,     0,    75,   471,   472,   473,    76,     0,
-      77,     0,     0,     0,     0,     0,    78,   150,   151,   152,
-     153,   154,   155,   156,   157,   158,     0,     0,     0,     0,
-       0,     0,     0,     0,     0,     0,   476,   477,   478,   479,
-     480,   481,   482,   483,   484,   468,     0,     0,   477,   478,
-     479,   480,   481,   482,   483,   484,     0,     0,     0,     0,
-       0,     0,   495,   496,   497,   498,   499,   500,   501,   502,
-     503,   504,   505,   506,   507,   508,     0,     0,     0,     0,
-       0,     0,     0,     0,     0,   468
+      39,    40,   125,    26,   121,   122,    37,   136,    18,    31,
+     133,   211,   447,   390,   390,   144,    39,    52,   320,   455,
+     215,   134,    21,   135,   180,   181,   371,   324,    32,    33,
+     172,   173,    39,   110,   257,    50,   177,   122,    21,  -186,
+     449,   205,    34,   135,    73,   114,    59,    43,    37,   455,
+     249,   250,   144,   485,    48,    79,    85,   443,   206,   444,
+     206,   172,    29,    37,   455,     3,   212,   117,    21,   313,
+      38,   115,   456,   214,   108,   457,   145,   258,    29,   458,
+     459,  -198,   512,   113,   324,    37,   455,   386,   137,   138,
+     139,   372,   241,   123,   135,   506,   331,    22,   486,    30,
+     480,   247,   170,   390,  -177,   457,   -17,   399,    23,   458,
+     459,    59,   460,   202,    32,    33,    37,   529,   314,    63,
+     457,   429,   189,    -7,   458,   459,   194,   460,     4,   511,
+      54,    24,   510,     4,    14,   361,   204,   268,   208,   109,
+     193,   194,   457,   199,   221,    17,   458,   459,  -187,   460,
+     194,   216,   465,   198,   306,   223,   224,   225,   226,   227,
+     228,   229,   230,   231,   232,   233,   234,   235,   236,   237,
+     238,   446,   239,   309,   308,   310,  -192,    21,   312,   202,
+     194,   194,   255,   194,   362,   466,   357,   450,   116,   240,
+     242,   342,   244,   430,   431,   248,   -88,   -88,   259,   476,
+     220,   165,   347,   202,   166,   167,   299,   252,   194,   273,
+     265,   150,   202,    35,    54,   341,  -218,    29,   466,   165,
+     466,    55,   166,   167,    32,    33,   504,    21,   403,   180,
+     181,    36,   263,    21,   350,   393,   394,   382,   168,   169,
+      41,    42,   348,   360,   412,   365,   367,   202,   366,    44,
+     374,   158,   159,   160,   161,   162,   168,   169,   202,   527,
+     160,   161,   162,   358,   383,   384,   385,    29,   387,   194,
+     484,   202,  -176,    29,   398,   326,   359,   328,   299,   202,
+     300,   530,    37,   202,   327,    63,    53,   202,    64,   299,
+      65,    66,    67,   408,   500,   410,   502,   513,   514,   515,
+     516,   517,   518,   519,   520,   521,   522,   523,   524,  -186,
+     352,   216,   414,   122,   202,   356,   194,  -186,    69,   405,
+     202,    70,   484,    72,   299,   411,   194,   202,   202,    76,
+      77,    78,   438,   440,   202,   487,  -187,   117,   436,   469,
+     355,   200,   201,   202,    56,   442,   120,   158,   159,   160,
+     161,   162,    84,   379,   381,   387,   380,   380,   194,   150,
+     151,   152,   494,   495,   496,   497,   498,   419,   420,   409,
+     202,   202,    45,    46,   194,   494,   495,   496,   497,   498,
+     477,   421,   505,   111,   202,   202,   416,   163,   164,   424,
+     496,   497,   498,   175,   176,   434,   155,   156,   157,   158,
+     159,   160,   161,   162,   418,   487,   488,   489,    39,   107,
+     387,   114,   202,   203,   437,   270,   271,   318,   319,    60,
+     112,    37,    61,    62,    63,   180,   181,    64,   116,    65,
+      66,    67,    68,   451,    39,   453,   454,   119,    39,    52,
+     171,   490,   491,   492,   493,   494,   495,   496,   497,   498,
+     318,   325,   128,   473,   509,   202,   471,    69,   130,   132,
+      70,    71,    72,    39,    73,    74,    75,   146,    76,    77,
+      78,   150,   151,   152,   117,    79,   363,   150,    80,   152,
+     174,    48,    81,    82,   210,    83,   487,   488,   489,   253,
+     243,    84,   256,    60,   364,    37,    61,    62,    63,   261,
+     262,    64,   264,    65,    66,    67,    68,   154,   155,   156,
+     157,   158,   159,   160,   161,   162,   157,   158,   159,   160,
+     161,   162,   490,   491,   492,   493,   494,   495,   496,   497,
+     498,    69,   266,   272,    70,    71,    72,   304,    73,    74,
+      75,   301,    76,    77,    78,   487,   488,   489,   303,    79,
+     406,   305,    80,   150,   151,   152,    81,    82,   311,    83,
+     487,   488,   489,   315,   316,    84,   317,    60,   407,    37,
+      61,    62,    63,   332,   333,    64,   334,    65,    66,    67,
+      68,   336,   491,   492,   493,   494,   495,   496,   497,   498,
+     337,   156,   157,   158,   159,   160,   161,   162,   492,   493,
+     494,   495,   496,   497,   498,    69,   338,   343,    70,    71,
+      72,   339,    73,    74,    75,   349,    76,    77,    78,   351,
+     354,   369,   135,    79,   147,   148,    80,   150,   151,   152,
+      81,    82,   368,    83,   150,   151,   152,   375,   400,    84,
+     413,    60,  -230,    37,    61,    62,    63,   401,   404,    64,
+     415,    65,    66,    67,    68,   422,   202,   423,   425,   426,
+     427,   428,   435,   154,   155,   156,   157,   158,   159,   160,
+     161,   162,   441,   157,   158,   159,   160,   161,   162,    69,
+     376,   448,    70,    71,    72,   445,    73,    74,    75,   464,
+      76,    77,    78,   472,   474,   478,   481,    79,   147,   482,
+      80,   150,   151,   152,    81,    82,   483,    83,   487,   488,
+     489,    54,   501,    84,   499,    60,  -232,    37,    61,    62,
+      63,   503,   508,   140,   525,    65,    66,    67,    68,   526,
+     131,   528,   433,   452,   188,    13,   127,   154,   155,   156,
+     157,   158,   159,   160,   161,   162,   330,   493,   494,   495,
+     496,   497,   498,    69,    51,   251,    70,    71,    72,  -177,
+      73,    74,    75,    29,    76,    77,    78,   487,   322,   489,
+     209,    79,   391,   353,    80,   141,   178,   254,    81,    82,
+     179,    83,     0,   142,   323,     0,     0,    84,    60,   143,
+      37,    61,    62,    63,     0,     0,    64,     0,    65,    66,
+      67,    68,     0,     0,     0,     0,   493,   494,   495,   496,
+     497,   498,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,    69,     0,     0,    70,
+      71,    72,     0,    73,    74,    75,     0,    76,    77,    78,
+       0,     0,     0,     0,    79,     0,     0,    80,   141,     0,
+       0,    81,    82,     0,    83,     0,   142,     0,     0,     0,
+      84,   274,   143,    37,    61,    62,    63,     0,     0,   140,
+       0,    65,    66,    67,    68,     0,     0,     0,     0,     0,
+       0,     0,   275,     0,   276,     0,     0,     0,     0,   277,
+     278,   279,   280,     0,   281,   282,   283,     0,     0,    69,
+       0,     0,    70,    71,    72,  -177,    73,    74,    75,    29,
+      76,    77,    78,     0,     0,     0,     0,    79,     0,     0,
+      80,     0,     0,     0,    81,    82,   284,    83,     0,   135,
+     -46,     0,    60,    84,    37,    61,    62,    63,     0,     0,
+      64,     0,    65,    66,    67,    68,     0,     0,     0,     0,
+       0,     0,     0,   275,     0,   276,   430,   431,     0,     0,
+     277,   278,   279,   280,     0,   281,   282,   283,     0,     0,
+      69,     0,     0,    70,    71,    72,     0,    73,    74,    75,
+       0,    76,    77,    78,     0,     0,     0,     0,    79,     0,
+       0,    80,     0,     0,     0,    81,    82,   284,    83,     0,
+     135,  -141,     0,    60,    84,    37,    61,    62,    63,     0,
+       0,    64,     0,    65,    66,    67,    68,     0,     0,     0,
+       0,     0,     0,     0,   275,     0,   276,     0,     0,     0,
+       0,   277,   278,   279,   280,     0,   281,   282,   283,     0,
+       0,    69,     0,     0,    70,    71,    72,     0,    73,    74,
+      75,     0,    76,    77,    78,     0,     0,     0,     0,    79,
+       0,     0,    80,     0,     0,     0,    81,    82,   284,    83,
+       0,   135,     0,     0,    60,    84,    37,    61,    62,    63,
+       0,     0,   140,     0,    65,    66,    67,    68,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,    69,     0,     0,    70,    71,    72,  -177,    73,
+      74,    75,    29,    76,    77,    78,     0,     0,     0,     0,
+      79,     0,     0,    80,     0,     0,     0,    81,    82,  -149,
+      83,     0,     0,     0,     0,    60,    84,    37,    61,    62,
+      63,     0,     0,    64,     0,    65,    66,    67,    68,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,   245,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,    69,     0,     0,    70,    71,    72,     0,
+      73,    74,    75,     0,    76,    77,    78,     0,     0,     0,
+       0,    79,   246,     0,    80,     0,     0,     0,    81,    82,
+      60,    83,    37,    61,    62,    63,     0,    84,    64,     0,
+      65,    66,    67,    68,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,    69,     0,
+       0,    70,    71,    72,     0,    73,    74,    75,     0,    76,
+      77,    78,     0,     0,     0,     0,    79,     0,     0,    80,
+       0,     0,     0,    81,    82,     0,    83,  -227,     0,  -227,
+       0,    60,    84,    37,    61,    62,    63,     0,     0,    64,
+       0,    65,    66,    67,    68,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,    69,
+       0,     0,    70,    71,    72,     0,    73,    74,    75,     0,
+      76,    77,    78,     0,     0,     0,     0,    79,     0,     0,
+      80,     0,     0,     0,    81,    82,     0,    83,  -225,     0,
+       0,     0,    60,    84,    37,    61,    62,    63,     0,     0,
+      64,     0,    65,    66,    67,    68,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+      69,     0,     0,    70,    71,    72,     0,    73,    74,    75,
+       0,    76,    77,    78,     0,     0,     0,     0,    79,     0,
+       0,    80,     0,     0,     0,    81,    82,     0,    83,     0,
+       0,  -225,     0,    60,    84,    37,    61,    62,    63,     0,
+       0,    64,     0,    65,    66,    67,    68,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,    69,     0,     0,    70,    71,    72,     0,    73,    74,
+      75,     0,    76,    77,    78,     0,     0,     0,     0,    79,
+       0,     0,    80,     0,     0,     0,    81,    82,   340,    83,
+       0,     0,     0,     0,    60,    84,    37,    61,    62,    63,
+       0,     0,    64,     0,    65,    66,    67,    68,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,    69,     0,     0,    70,    71,    72,     0,    73,
+      74,    75,     0,    76,    77,    78,     0,     0,     0,     0,
+      79,     0,     0,    80,     0,     0,     0,    81,    82,  -149,
+      83,     0,     0,     0,     0,    60,    84,    37,    61,    62,
+      63,     0,     0,    64,     0,    65,    66,    67,    68,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,    69,     0,     0,    70,    71,    72,     0,
+      73,    74,    75,     0,    76,    77,    78,     0,     0,     0,
+       0,    79,     0,     0,    80,     0,     0,     0,    81,    82,
+       0,    83,  -149,     0,     0,     0,    60,    84,    37,    61,
+      62,    63,     0,     0,    64,     0,    65,    66,    67,    68,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,    69,     0,     0,    70,    71,    72,
+       0,    73,    74,    75,     0,    76,    77,    78,     0,     0,
+       0,     0,    79,     0,     0,    80,     0,     0,     0,    81,
+      82,    60,    83,    37,    61,    62,    63,     0,    84,    64,
+       0,   124,    66,    67,    68,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,    69,
+       0,     0,    70,    71,    72,     0,    73,    74,    75,     0,
+      76,    77,    78,     0,     0,     0,     0,    79,     0,     0,
+      80,     0,     0,     0,    81,    82,     0,    83,     0,     0,
+       0,     0,     0,    84,   147,   148,   149,   150,   151,   152,
+       0,     0,     0,     0,   147,   148,   149,   150,   151,   152,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,   153,   154,   155,   156,   157,   158,   159,   160,
+     161,   162,   153,   154,   155,   156,   157,   158,   159,   160,
+     161,   162,     0,     0,   439,     0,   190,   191,     0,     0,
+       0,     0,     0,     0,   470,   147,   148,   149,   150,   151,
+     152,     0,     0,     0,     0,   147,   148,   149,   150,   151,
+     152,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,   147,   148,   149,   150,   151,   152,
+       0,     0,     0,   153,   154,   155,   156,   157,   158,   159,
+     160,   161,   162,   153,   154,   155,   156,   157,   158,   159,
+     160,   161,   162,   147,   148,   149,   150,   151,   152,     0,
+       0,   302,   153,   154,   155,   156,   157,   158,   159,   160,
+     161,   162,   147,   148,   149,   150,   151,   152,     0,     0,
+     307,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,   153,   154,   155,   156,   157,   158,   159,   160,   161,
+     162,   147,   148,   149,   150,   151,   152,     0,   267,     0,
+     153,   154,   155,   156,   157,   158,   159,   160,   161,   162,
+     147,   148,   149,   150,   151,   152,     0,   269,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,   153,
+     154,   155,   156,   157,   158,   159,   160,   161,   162,   147,
+     148,   149,   150,   151,   152,     0,   376,     0,   153,   154,
+     155,   156,   157,   158,   159,   160,   161,   162,   147,   148,
+     149,   150,   151,   152,     0,   378,     0,     0,     0,     0,
+     260,   147,   148,   149,   150,   151,   152,   153,   154,   155,
+     156,   157,   158,   159,   160,   161,   162,     0,     0,     0,
+       0,   479,     0,     0,     0,     0,   153,   154,   155,   156,
+     157,   158,   159,   160,   161,   162,     0,     0,     0,   153,
+     154,   155,   156,   157,   158,   159,   160,   161,   162
 };
 
 static const yytype_int16 yycheck[] =
 {
-      16,    16,    10,    45,    59,    60,    59,    60,    74,    11,
-     237,   399,    28,    28,   314,   315,    13,   187,     1,    61,
-     451,    63,    64,   182,    65,    41,    41,     6,    83,    13,
-      83,     3,    17,    75,    76,     0,    77,    39,   469,    24,
-      82,   200,   395,    25,    70,    26,    72,    38,     0,   272,
-       6,   274,     8,     9,     7,     7,     6,   313,   124,   101,
-     126,    68,    47,     3,     4,   106,     3,     4,    64,    77,
-      49,   459,    69,    23,    24,   234,   235,    62,    69,    19,
-     433,   123,    19,   125,    68,    68,   309,   128,    25,    71,
-      73,    72,   100,    49,   135,    74,   396,    69,    45,    49,
-     142,   143,   144,   145,   146,   147,   148,   149,   150,   151,
-     152,   153,   154,   155,   156,   157,   158,   102,   288,   161,
-     105,   163,    70,    63,    72,   166,    63,    67,    38,    69,
-      67,    71,    69,   389,   136,     3,     4,    11,    12,    13,
-     182,    62,    38,     6,   371,   187,   188,    72,   190,    70,
-     192,    19,    77,   194,   139,     8,     9,   413,   200,    69,
-       4,    35,    36,    72,    35,    36,   393,   208,    77,    25,
-     329,   173,   428,    69,    37,    19,    64,    65,    66,   164,
-     165,     6,    45,     8,     9,   441,    49,     8,     9,   445,
-      25,   232,   234,   235,   202,    63,    69,    50,    45,    67,
-      73,    69,    76,    68,   460,    76,   462,   463,    71,   251,
-      14,   253,    16,    17,    18,   374,    72,    72,    70,    63,
-      72,    77,   381,    67,    49,    69,   267,    72,    16,    17,
-     296,    72,    77,     8,     9,   301,    77,    72,     6,   241,
-       8,     9,    77,    62,   286,    70,   288,    69,     3,    68,
-     291,    73,    56,    57,    58,    59,    60,    61,    62,    63,
-      64,    65,    66,    68,   272,    73,   274,    72,    68,   310,
-     311,   312,    72,   314,    62,    63,    64,    65,    66,     3,
-      73,    49,     6,    73,     8,     9,    10,   329,    70,   330,
-      72,   332,    70,   348,    72,   348,    62,    63,    64,    65,
-      66,   309,    62,    63,    64,    65,    66,    69,   350,    11,
-      12,    13,    13,   298,    38,    39,    40,    41,    42,    38,
-      44,    64,    65,    66,    71,    72,    50,    51,    52,    70,
-      38,    72,   374,    71,    72,   376,    16,    17,    18,   381,
-      70,   382,    72,   345,    70,    69,    72,    69,    16,    17,
-      18,    75,   394,    69,   395,   397,    70,   359,    72,    70,
-      70,    72,    72,   460,   384,   462,   386,   352,   410,     8,
-       9,    16,    17,   414,     8,     9,    71,    72,   420,    59,
-      60,    61,    62,    63,    64,    65,    66,     8,     9,    71,
-      72,    69,   433,    61,    62,    63,    64,    65,    66,    69,
-      38,    13,    69,    69,    69,     1,    77,     3,     4,     5,
-       6,    74,     8,     9,    10,    11,    12,    62,    63,    64,
-      65,    66,    72,    19,    72,    49,   442,    70,    46,    70,
-     438,    71,    74,    70,    70,   451,    68,    70,   454,   454,
-      70,    69,    38,    39,    40,    41,    42,    43,    44,    69,
-      46,    47,    48,   469,    50,    51,    52,    70,    14,    15,
-      16,    17,    18,    70,    70,    61,    69,    63,    69,    69,
-      69,    67,    69,    69,    68,    70,    69,    68,    70,    75,
-       1,    77,     3,     4,     5,     6,    70,     8,     9,    10,
-      11,    12,    72,    41,    73,    70,    27,    13,    19,    55,
-      56,    57,    58,    59,    60,    61,    62,    63,    64,    65,
-      66,    68,    72,    72,    31,    68,    72,    38,    39,    40,
-      41,    42,    43,    44,    70,    46,    47,    48,    72,    50,
-      51,    52,    72,    14,    15,    16,    17,    18,    71,    69,
-      61,    13,    63,    70,    70,    70,    67,    21,    69,    73,
-      68,    70,     4,    68,    75,     1,    77,     3,     4,     5,
-       6,    70,     8,     9,    10,    11,    12,    71,     4,     4,
-      62,    74,    71,    19,    55,    56,    57,    58,    59,    60,
-      61,    62,    63,    64,    65,    66,    68,    71,   345,   240,
-       4,    72,    38,    39,    40,    41,    42,    43,    44,   181,
-      46,    47,    48,   172,    50,    51,    52,    39,    14,    15,
-      16,    17,    18,   396,   314,   438,   163,    63,   190,   126,
-     255,    67,    65,    69,    -1,    -1,    -1,    -1,    -1,    75,
-       1,    77,     3,     4,     5,     6,    -1,     8,     9,    10,
-      11,    12,    -1,    -1,    -1,    -1,    -1,    -1,    19,    55,
-      56,    57,    58,    59,    60,    61,    62,    63,    64,    65,
-      66,    -1,    -1,    -1,    -1,    -1,    72,    38,    39,    40,
-      41,    42,    43,    44,    -1,    46,    47,    48,    -1,    50,
-      51,    52,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,    63,    -1,    -1,    -1,    67,    -1,    69,    -1,
-      -1,    -1,    -1,    -1,    75,     1,    77,     3,     4,     5,
-       6,    -1,     8,     9,    10,    11,    12,    -1,    -1,    -1,
-      -1,    -1,    -1,    19,    20,    -1,    22,    -1,    -1,    -1,
-      -1,    27,    28,    29,    30,    -1,    32,    33,    34,    -1,
-      -1,    -1,    38,    39,    40,    41,    42,    43,    44,    45,
-      46,    47,    48,    49,    50,    51,    52,    -1,    -1,    -1,
-      -1,    -1,    -1,    -1,    -1,    -1,    -1,    63,    -1,    -1,
-      -1,    67,    68,    69,    -1,    -1,    -1,    73,    74,    75,
-       1,    -1,     3,     4,     5,     6,    -1,     8,     9,    10,
-      11,    12,    -1,    -1,    -1,    -1,    -1,    -1,    19,    20,
-      -1,    22,    23,    24,    -1,    -1,    27,    28,    29,    30,
-      -1,    32,    33,    34,    -1,    -1,    -1,    38,    39,    40,
-      41,    42,    43,    44,    -1,    46,    47,    48,    -1,    50,
-      51,    52,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,    -1,    63,    -1,    -1,    -1,    67,    68,    69,    -1,
-      -1,    -1,    73,    74,    75,     1,    -1,     3,     4,     5,
-       6,    -1,     8,     9,    10,    11,    12,    -1,    -1,    -1,
-      -1,    -1,    -1,    19,    20,    -1,    22,    -1,    -1,    -1,
-      -1,    27,    28,    29,    30,    -1,    32,    33,    34,    -1,
-      -1,    -1,    38,    39,    40,    41,    42,    43,    44,    -1,
-      46,    47,    48,    -1,    50,    51,    52,    14,    15,    16,
-      17,    18,    -1,    -1,    -1,    -1,    -1,    63,    -1,    -1,
-      -1,    67,    68,    69,    -1,    -1,    -1,    73,     1,    75,
-       3,     4,     5,     6,    -1,     8,     9,    10,    11,    12,
-      -1,    -1,    -1,    -1,    -1,    -1,    19,    -1,    55,    56,
-      57,    58,    59,    60,    61,    62,    63,    64,    65,    66,
-      -1,    -1,    -1,    -1,    71,    38,    39,    40,    41,    42,
-      43,    44,    45,    46,    47,    48,    49,    50,    51,    52,
-      14,    15,    16,    17,    18,    -1,    -1,    -1,    -1,    -1,
-      63,    64,    -1,    -1,    67,    -1,    69,    -1,    -1,    -1,
-      -1,     1,    75,     3,     4,     5,     6,    -1,     8,     9,
-      10,    11,    12,    -1,    -1,    -1,    -1,    -1,    -1,    19,
-      -1,    55,    56,    57,    58,    59,    60,    61,    62,    63,
-      64,    65,    66,    -1,    -1,    -1,    -1,    71,    38,    39,
-      40,    41,    42,    43,    44,    45,    46,    47,    48,    49,
-      50,    51,    52,    14,    15,    16,    17,    18,    -1,    -1,
-      -1,    -1,    -1,    63,    -1,    -1,    -1,    67,    68,    69,
-      -1,    -1,    -1,    -1,     1,    75,     3,     4,     5,     6,
-      -1,     8,     9,    10,    11,    12,    -1,    -1,    -1,    -1,
-      -1,    -1,    19,    -1,    55,    56,    57,    58,    59,    60,
-      61,    62,    63,    64,    65,    66,    -1,    -1,    -1,    70,
-      -1,    38,    39,    40,    41,    42,    43,    44,    -1,    46,
-      47,    48,    -1,    50,    51,    52,    -1,    14,    15,    16,
-      17,    18,    -1,    -1,    -1,    -1,    63,    -1,    -1,    -1,
-      67,    -1,    69,    70,    -1,    -1,    -1,    74,    75,     1,
-      -1,     3,     4,     5,     6,    -1,     8,     9,    10,    11,
-      12,    -1,    -1,    -1,    -1,    -1,    -1,    19,    55,    56,
-      57,    58,    59,    60,    61,    62,    63,    64,    65,    66,
-      -1,    -1,    -1,    -1,    -1,    72,    38,    39,    40,    41,
-      42,    43,    44,    -1,    46,    47,    48,    -1,    50,    51,
-      52,    -1,    -1,    16,    17,    18,    -1,    -1,    -1,    -1,
-      -1,    63,    -1,    -1,    -1,    67,    -1,    69,    -1,    -1,
-      -1,    -1,    74,    75,     1,    -1,     3,     4,     5,     6,
-      -1,     8,     9,    10,    11,    12,    -1,    -1,    -1,    -1,
-      -1,    -1,    19,    56,    57,    58,    59,    60,    61,    62,
-      63,    64,    65,    66,    -1,    -1,    -1,    70,    -1,    -1,
-      -1,    38,    39,    40,    41,    42,    43,    44,    -1,    46,
-      47,    48,    -1,    50,    51,    52,    14,    15,    16,    17,
-      18,    -1,    -1,    -1,    -1,    -1,    63,    64,    26,    -1,
-      67,    -1,    69,    -1,    -1,    -1,    -1,     1,    75,     3,
-       4,     5,     6,    -1,     8,     9,    10,    11,    12,    -1,
-      -1,    -1,    -1,    -1,    -1,    19,    -1,    55,    56,    57,
-      58,    59,    60,    61,    62,    63,    64,    65,    66,    -1,
-      -1,    -1,    -1,    -1,    38,    39,    40,    41,    42,    43,
-      44,    -1,    46,    47,    48,    -1,    50,    51,    52,    14,
-      15,    16,    17,    18,    -1,    -1,    -1,    61,    -1,    63,
-      -1,    -1,    -1,    67,    -1,    69,    -1,    -1,    -1,    -1,
-       1,    75,     3,     4,     5,     6,    -1,     8,     9,    10,
-      11,    12,    -1,    -1,    -1,    -1,    -1,    -1,    19,    -1,
-      55,    56,    57,    58,    59,    60,    61,    62,    63,    64,
-      65,    66,    -1,    -1,    -1,    -1,    -1,    38,    39,    40,
-      41,    42,    43,    44,    -1,    46,    47,    48,    -1,    50,
-      51,    52,    16,    17,    18,    -1,    -1,    -1,    16,    17,
-      18,    -1,    63,    -1,    -1,    -1,    67,    -1,    69,    70,
-      -1,    -1,    -1,     1,    75,     3,     4,     5,     6,    -1,
-       8,     9,    10,    11,    12,    -1,    -1,    -1,    -1,    -1,
-      -1,    19,    56,    57,    58,    59,    60,    61,    62,    63,
-      64,    65,    66,    61,    62,    63,    64,    65,    66,    -1,
-      38,    39,    40,    41,    42,    43,    44,    -1,    46,    47,
-      48,    -1,    50,    51,    52,    16,    17,    18,    -1,    -1,
-      -1,    -1,    -1,    -1,    -1,    63,    -1,    -1,    -1,    67,
-      68,    69,    -1,    -1,    -1,    -1,     1,    75,     3,     4,
-       5,     6,    -1,     8,     9,    10,    11,    12,    -1,    -1,
-      -1,    -1,    -1,    -1,    19,    56,    57,    58,    59,    60,
-      61,    62,    63,    64,    65,    66,    -1,    -1,    -1,    -1,
-      -1,    -1,    -1,    38,    39,    40,    41,    42,    43,    44,
-      -1,    46,    47,    48,    -1,    50,    51,    52,    16,    17,
-      18,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    63,    -1,
-      -1,    -1,    67,    68,    69,    -1,    -1,    -1,    -1,     1,
-      75,     3,     4,     5,     6,    -1,     8,     9,    10,    11,
-      12,    -1,    -1,    -1,    -1,    -1,    -1,    19,    -1,    57,
-      58,    59,    60,    61,    62,    63,    64,    65,    66,    -1,
-      -1,    -1,    -1,    -1,    -1,    -1,    38,    39,    40,    41,
-      42,    43,    44,    -1,    46,    47,    48,    -1,    50,    51,
-      52,    16,    17,    18,    -1,    -1,    -1,    -1,    -1,    -1,
-      -1,    63,    -1,    -1,    -1,    67,    -1,    69,    70,    -1,
-      -1,    -1,     1,    75,     3,     4,     5,     6,    -1,     8,
-       9,    10,    11,    12,    -1,    -1,    -1,    -1,    -1,    -1,
-      19,    -1,    57,    58,    59,    60,    61,    62,    63,    64,
-      65,    66,    -1,    -1,    -1,    16,    17,    18,    -1,    38,
-      39,    40,    41,    42,    43,    44,    -1,    46,    47,    48,
-      -1,    50,    51,    52,    16,    17,    18,    -1,    -1,    -1,
-      -1,    -1,    -1,    -1,    63,    16,    17,    18,    67,    -1,
-      69,    -1,    -1,    -1,    -1,    -1,    75,    58,    59,    60,
-      61,    62,    63,    64,    65,    66,    -1,    -1,    -1,    -1,
-      -1,    -1,    -1,    -1,    -1,    -1,    58,    59,    60,    61,
-      62,    63,    64,    65,    66,   454,    -1,    -1,    59,    60,
-      61,    62,    63,    64,    65,    66,    -1,    -1,    -1,    -1,
-      -1,    -1,   471,   472,   473,   474,   475,   476,   477,   478,
-     479,   480,   481,   482,   483,   484,    -1,    -1,    -1,    -1,
-      -1,    -1,    -1,    -1,    -1,   494
+      22,    22,    70,    10,    68,    68,     3,    78,     9,    16,
+      76,   133,   421,   336,   337,    83,    38,    38,   255,     4,
+     142,    67,     9,    69,    11,    12,     1,   261,    11,    12,
+      96,    97,    54,    54,    28,    36,   100,   100,     9,    39,
+     423,    67,    18,    69,    46,    15,    47,    23,     3,     4,
+     172,   173,   120,    27,    15,    57,    48,   414,   129,   416,
+     131,   127,    49,     3,     4,     0,   134,    67,     9,    27,
+      67,    63,    27,   141,    50,    60,    83,    71,    49,    64,
+      65,    68,    67,    59,   318,     3,     4,   335,    80,    81,
+      82,    66,    75,    69,    69,   478,    66,    38,    72,    70,
+     456,   169,    94,   426,    45,    60,    67,   344,    49,    64,
+      65,   112,    67,    71,    11,    12,     3,   526,    76,     6,
+      60,   401,   114,     0,    64,    65,   118,    67,    10,   485,
+      59,    72,    72,    10,    66,    27,   128,   205,   130,    68,
+     116,   133,    60,   119,   145,    61,    64,    65,    39,    67,
+     142,   143,   432,    50,   222,   147,   148,   149,   150,   151,
+     152,   153,   154,   155,   156,   157,   158,   159,   160,   161,
+     162,   419,   164,   241,   240,   243,    67,     9,   246,    71,
+     172,   173,   183,   175,    76,   433,   308,   424,    39,   165,
+     166,   285,   168,    25,    26,   171,    14,    15,   190,   447,
+      68,    37,   296,    71,    40,    41,   213,   175,   200,    68,
+     202,    19,    71,    66,    59,   283,    67,    49,   466,    37,
+     468,    66,    40,    41,    11,    12,   474,     9,   350,    11,
+      12,    71,   200,     9,   300,    11,    12,   331,    74,    75,
+      11,    12,    66,   311,   366,   313,   317,    71,   314,    45,
+     321,    59,    60,    61,    62,    63,    74,    75,    71,   507,
+      61,    62,    63,    76,   332,   333,   334,    49,   336,   261,
+     460,    71,    45,    49,    66,   267,    76,   269,   285,    71,
+      68,   529,     3,    71,    68,     6,     3,    71,     9,   296,
+      11,    12,    13,   361,   466,   363,   468,   487,   488,   489,
+     490,   491,   492,   493,   494,   495,   496,   497,   498,    39,
+     302,   303,   376,   376,    71,   307,   308,    69,    39,    76,
+      71,    42,   512,    44,   331,    76,   318,    71,    71,    50,
+      51,    52,    76,    76,    71,    19,    69,    67,   406,    76,
+      68,    71,    72,    71,    69,   413,    67,    59,    60,    61,
+      62,    63,    73,    68,    68,   423,    71,    71,   350,    19,
+      20,    21,    59,    60,    61,    62,    63,    68,    68,   361,
+      71,    71,    11,    12,   366,    59,    60,    61,    62,    63,
+     448,    68,    68,    66,    71,    71,   378,    14,    15,   390,
+      61,    62,    63,    71,    72,   402,    56,    57,    58,    59,
+      60,    61,    62,    63,   380,    19,    20,    21,   430,    67,
+     478,    15,    71,    72,   406,    11,    12,    71,    72,     1,
+      71,     3,     4,     5,     6,    11,    12,     9,    39,    11,
+      12,    13,    14,   425,   456,   427,   428,    39,   460,   460,
+      39,    55,    56,    57,    58,    59,    60,    61,    62,    63,
+      71,    72,    67,   445,    68,    71,    72,    39,    67,    67,
+      42,    43,    44,   485,    46,    47,    48,    67,    50,    51,
+      52,    19,    20,    21,    67,    57,    58,    19,    60,    21,
+      67,    15,    64,    65,    49,    67,    19,    20,    21,    68,
+      75,    73,    68,     1,    76,     3,     4,     5,     6,    71,
+      68,     9,    68,    11,    12,    13,    14,    55,    56,    57,
+      58,    59,    60,    61,    62,    63,    58,    59,    60,    61,
+      62,    63,    55,    56,    57,    58,    59,    60,    61,    62,
+      63,    39,    68,    68,    42,    43,    44,    76,    46,    47,
+      48,    70,    50,    51,    52,    19,    20,    21,    71,    57,
+      58,    68,    60,    19,    20,    21,    64,    65,    58,    67,
+      19,    20,    21,    68,    68,    73,    68,     1,    76,     3,
+       4,     5,     6,    67,    67,     9,    67,    11,    12,    13,
+      14,    67,    56,    57,    58,    59,    60,    61,    62,    63,
+      67,    57,    58,    59,    60,    61,    62,    63,    57,    58,
+      59,    60,    61,    62,    63,    39,    66,    70,    42,    43,
+      44,    66,    46,    47,    48,    69,    50,    51,    52,    68,
+      68,    72,    69,    57,    16,    17,    60,    19,    20,    21,
+      64,    65,    68,    67,    19,    20,    21,    68,    66,    73,
+      42,     1,    76,     3,     4,     5,     6,    71,    68,     9,
+      68,    11,    12,    13,    14,    29,    71,    66,    15,    71,
+      33,    15,    68,    55,    56,    57,    58,    59,    60,    61,
+      62,    63,    68,    58,    59,    60,    61,    62,    63,    39,
+      71,    67,    42,    43,    44,    72,    46,    47,    48,    72,
+      50,    51,    52,    68,    23,    66,     4,    57,    16,     4,
+      60,    19,    20,    21,    64,    65,     4,    67,    19,    20,
+      21,    59,    70,    73,    66,     1,    76,     3,     4,     5,
+       6,    68,    72,     9,    66,    11,    12,    13,    14,    68,
+      75,    72,   402,   426,   112,     4,    70,    55,    56,    57,
+      58,    59,    60,    61,    62,    63,   271,    58,    59,    60,
+      61,    62,    63,    39,    36,   174,    42,    43,    44,    45,
+      46,    47,    48,    49,    50,    51,    52,    19,   258,    21,
+     131,    57,   336,   303,    60,    61,   103,   182,    64,    65,
+     103,    67,    -1,    69,   259,    -1,    -1,    73,     1,    75,
+       3,     4,     5,     6,    -1,    -1,     9,    -1,    11,    12,
+      13,    14,    -1,    -1,    -1,    -1,    58,    59,    60,    61,
+      62,    63,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    39,    -1,    -1,    42,
+      43,    44,    -1,    46,    47,    48,    -1,    50,    51,    52,
+      -1,    -1,    -1,    -1,    57,    -1,    -1,    60,    61,    -1,
+      -1,    64,    65,    -1,    67,    -1,    69,    -1,    -1,    -1,
+      73,     1,    75,     3,     4,     5,     6,    -1,    -1,     9,
+      -1,    11,    12,    13,    14,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    22,    -1,    24,    -1,    -1,    -1,    -1,    29,
+      30,    31,    32,    -1,    34,    35,    36,    -1,    -1,    39,
+      -1,    -1,    42,    43,    44,    45,    46,    47,    48,    49,
+      50,    51,    52,    -1,    -1,    -1,    -1,    57,    -1,    -1,
+      60,    -1,    -1,    -1,    64,    65,    66,    67,    -1,    69,
+      70,    -1,     1,    73,     3,     4,     5,     6,    -1,    -1,
+       9,    -1,    11,    12,    13,    14,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    22,    -1,    24,    25,    26,    -1,    -1,
+      29,    30,    31,    32,    -1,    34,    35,    36,    -1,    -1,
+      39,    -1,    -1,    42,    43,    44,    -1,    46,    47,    48,
+      -1,    50,    51,    52,    -1,    -1,    -1,    -1,    57,    -1,
+      -1,    60,    -1,    -1,    -1,    64,    65,    66,    67,    -1,
+      69,    70,    -1,     1,    73,     3,     4,     5,     6,    -1,
+      -1,     9,    -1,    11,    12,    13,    14,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    22,    -1,    24,    -1,    -1,    -1,
+      -1,    29,    30,    31,    32,    -1,    34,    35,    36,    -1,
+      -1,    39,    -1,    -1,    42,    43,    44,    -1,    46,    47,
+      48,    -1,    50,    51,    52,    -1,    -1,    -1,    -1,    57,
+      -1,    -1,    60,    -1,    -1,    -1,    64,    65,    66,    67,
+      -1,    69,    -1,    -1,     1,    73,     3,     4,     5,     6,
+      -1,    -1,     9,    -1,    11,    12,    13,    14,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    39,    -1,    -1,    42,    43,    44,    45,    46,
+      47,    48,    49,    50,    51,    52,    -1,    -1,    -1,    -1,
+      57,    -1,    -1,    60,    -1,    -1,    -1,    64,    65,    66,
+      67,    -1,    -1,    -1,    -1,     1,    73,     3,     4,     5,
+       6,    -1,    -1,     9,    -1,    11,    12,    13,    14,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    27,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    39,    -1,    -1,    42,    43,    44,    -1,
+      46,    47,    48,    -1,    50,    51,    52,    -1,    -1,    -1,
+      -1,    57,    58,    -1,    60,    -1,    -1,    -1,    64,    65,
+       1,    67,     3,     4,     5,     6,    -1,    73,     9,    -1,
+      11,    12,    13,    14,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    39,    -1,
+      -1,    42,    43,    44,    -1,    46,    47,    48,    -1,    50,
+      51,    52,    -1,    -1,    -1,    -1,    57,    -1,    -1,    60,
+      -1,    -1,    -1,    64,    65,    -1,    67,    68,    -1,    70,
+      -1,     1,    73,     3,     4,     5,     6,    -1,    -1,     9,
+      -1,    11,    12,    13,    14,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    39,
+      -1,    -1,    42,    43,    44,    -1,    46,    47,    48,    -1,
+      50,    51,    52,    -1,    -1,    -1,    -1,    57,    -1,    -1,
+      60,    -1,    -1,    -1,    64,    65,    -1,    67,    68,    -1,
+      -1,    -1,     1,    73,     3,     4,     5,     6,    -1,    -1,
+       9,    -1,    11,    12,    13,    14,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      39,    -1,    -1,    42,    43,    44,    -1,    46,    47,    48,
+      -1,    50,    51,    52,    -1,    -1,    -1,    -1,    57,    -1,
+      -1,    60,    -1,    -1,    -1,    64,    65,    -1,    67,    -1,
+      -1,    70,    -1,     1,    73,     3,     4,     5,     6,    -1,
+      -1,     9,    -1,    11,    12,    13,    14,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    39,    -1,    -1,    42,    43,    44,    -1,    46,    47,
+      48,    -1,    50,    51,    52,    -1,    -1,    -1,    -1,    57,
+      -1,    -1,    60,    -1,    -1,    -1,    64,    65,    66,    67,
+      -1,    -1,    -1,    -1,     1,    73,     3,     4,     5,     6,
+      -1,    -1,     9,    -1,    11,    12,    13,    14,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    39,    -1,    -1,    42,    43,    44,    -1,    46,
+      47,    48,    -1,    50,    51,    52,    -1,    -1,    -1,    -1,
+      57,    -1,    -1,    60,    -1,    -1,    -1,    64,    65,    66,
+      67,    -1,    -1,    -1,    -1,     1,    73,     3,     4,     5,
+       6,    -1,    -1,     9,    -1,    11,    12,    13,    14,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    39,    -1,    -1,    42,    43,    44,    -1,
+      46,    47,    48,    -1,    50,    51,    52,    -1,    -1,    -1,
+      -1,    57,    -1,    -1,    60,    -1,    -1,    -1,    64,    65,
+      -1,    67,    68,    -1,    -1,    -1,     1,    73,     3,     4,
+       5,     6,    -1,    -1,     9,    -1,    11,    12,    13,    14,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    39,    -1,    -1,    42,    43,    44,
+      -1,    46,    47,    48,    -1,    50,    51,    52,    -1,    -1,
+      -1,    -1,    57,    -1,    -1,    60,    -1,    -1,    -1,    64,
+      65,     1,    67,     3,     4,     5,     6,    -1,    73,     9,
+      -1,    11,    12,    13,    14,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    39,
+      -1,    -1,    42,    43,    44,    -1,    46,    47,    48,    -1,
+      50,    51,    52,    -1,    -1,    -1,    -1,    57,    -1,    -1,
+      60,    -1,    -1,    -1,    64,    65,    -1,    67,    -1,    -1,
+      -1,    -1,    -1,    73,    16,    17,    18,    19,    20,    21,
+      -1,    -1,    -1,    -1,    16,    17,    18,    19,    20,    21,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    54,    55,    56,    57,    58,    59,    60,    61,
+      62,    63,    54,    55,    56,    57,    58,    59,    60,    61,
+      62,    63,    -1,    -1,    76,    -1,     7,     8,    -1,    -1,
+      -1,    -1,    -1,    -1,    76,    16,    17,    18,    19,    20,
+      21,    -1,    -1,    -1,    -1,    16,    17,    18,    19,    20,
+      21,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    -1,    -1,    -1,    16,    17,    18,    19,    20,    21,
+      -1,    -1,    -1,    54,    55,    56,    57,    58,    59,    60,
+      61,    62,    63,    54,    55,    56,    57,    58,    59,    60,
+      61,    62,    63,    16,    17,    18,    19,    20,    21,    -1,
+      -1,    72,    54,    55,    56,    57,    58,    59,    60,    61,
+      62,    63,    16,    17,    18,    19,    20,    21,    -1,    -1,
+      72,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,
+      -1,    54,    55,    56,    57,    58,    59,    60,    61,    62,
+      63,    16,    17,    18,    19,    20,    21,    -1,    71,    -1,
+      54,    55,    56,    57,    58,    59,    60,    61,    62,    63,
+      16,    17,    18,    19,    20,    21,    -1,    71,    -1,    -1,
+      -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    -1,    54,
+      55,    56,    57,    58,    59,    60,    61,    62,    63,    16,
+      17,    18,    19,    20,    21,    -1,    71,    -1,    54,    55,
+      56,    57,    58,    59,    60,    61,    62,    63,    16,    17,
+      18,    19,    20,    21,    -1,    71,    -1,    -1,    -1,    -1,
+      28,    16,    17,    18,    19,    20,    21,    54,    55,    56,
+      57,    58,    59,    60,    61,    62,    63,    -1,    -1,    -1,
+      -1,    68,    -1,    -1,    -1,    -1,    54,    55,    56,    57,
+      58,    59,    60,    61,    62,    63,    -1,    -1,    -1,    54,
+      55,    56,    57,    58,    59,    60,    61,    62,    63
 };
 
 /* YYSTOS[STATE-NUM] -- The symbol kind of the accessing symbol of
    state STATE-NUM.  */
 static const yytype_uint8 yystos[] =
 {
-       0,    79,    80,     0,     7,    82,    88,    91,    92,    97,
-     108,   109,   108,    68,    81,     6,    37,    49,    71,   100,
-     101,   102,   111,    64,    85,   112,   113,     3,    69,   170,
-     171,     8,     9,    87,    45,     8,     9,    87,    68,    72,
-     170,    62,    68,     3,    73,    13,    89,    85,   112,    70,
-     170,    98,     1,     4,     5,     6,     8,     9,    10,    11,
-      12,    19,    38,    39,    40,    41,    42,    43,    44,    46,
-      47,    48,    50,    51,    52,    63,    67,    69,    75,    83,
-      84,    87,   110,   146,   147,   155,   156,   157,   161,   163,
-     164,   165,   166,   169,   171,   174,   182,   183,    69,    87,
-      95,    13,    38,   159,    69,    38,    69,   155,   157,   155,
-     147,    87,   147,   149,   150,   151,   147,   152,   153,   154,
-     145,   147,   182,    69,   162,    69,   167,    69,    69,    73,
-     114,   147,   147,     6,    49,    64,   102,   145,    69,    38,
-     147,   155,    14,    15,    16,    17,    18,    55,    56,    57,
-      58,    59,    60,    61,    62,    63,    64,    65,    66,    11,
-      12,    13,    71,    72,    35,    36,    76,    69,    69,     8,
-       9,    99,   102,   103,   105,   106,   107,    74,   102,   147,
-      87,    69,   177,    50,    87,    26,    74,    72,    71,    77,
-      72,    71,    72,   147,    69,   114,   160,   147,   160,    49,
-     176,   145,   115,     8,     9,   145,    85,    70,   158,    87,
-     147,   147,   147,   147,   147,   147,   147,   147,   147,   147,
-     147,   147,   147,   147,   147,   147,   147,   147,    70,   151,
-      87,    87,    61,   145,   175,   178,   146,    85,    70,    26,
-      72,    96,   106,   149,    70,   150,   147,    70,   154,    70,
-     147,    72,   145,    72,     8,     9,   149,    70,     1,    20,
-      22,    27,    28,    29,    30,    32,    33,    34,    68,   102,
-     114,   116,   123,   125,   126,   127,   129,   131,   135,   139,
-     145,   148,   184,    70,    70,   145,    71,    71,    72,    69,
-     145,    25,    77,   149,   149,    99,    90,   105,    85,    93,
-      94,    70,    70,   147,    70,   147,   173,   173,    70,    68,
-      69,    69,    69,   130,    69,    69,    68,    68,    68,   145,
-     124,   125,    74,   125,    68,    69,    70,   147,    70,   180,
-      25,    77,    61,    77,   145,    69,    70,    70,    71,   104,
-       1,    68,    86,   114,    87,    72,    68,   114,    72,   168,
-      72,    70,    72,    70,   125,   145,   145,   145,   126,   103,
-     120,   121,   137,   138,   145,     8,     9,   120,   133,   134,
-      68,    85,   119,   122,   181,   149,    61,    77,   145,   145,
-      77,   179,    41,    94,   155,    70,   147,    87,   172,    70,
-      70,    70,    27,    85,    13,    68,    72,    31,    99,    72,
-      68,   149,    70,   145,    77,    77,   149,   145,   168,   168,
-      71,   126,   140,   128,    69,    99,   147,   137,   133,   147,
-      13,   122,    70,    77,    70,    71,    70,   147,    21,   185,
-      73,   126,   145,    68,    70,   147,    70,   126,   117,    70,
-     137,   136,    23,    24,   102,   142,    68,    70,   126,     4,
-      19,    25,    63,    67,    69,   143,   144,   170,    71,   118,
-     126,   141,   142,   132,     4,   143,     4,     4,   144,    25,
-      71,    16,    17,    18,    56,    57,    58,    59,    60,    61,
-      62,    63,    64,    65,    66,   122,   141,    74,   141,   126,
-      71,    70,    71,   143,    69,   144,   144,   144,   144,   144,
-     144,   144,   144,   144,   144,   144,   144,   144,   144,    68,
-      71
+       0,    83,    84,     0,    10,    86,    87,   125,   126,   133,
+     134,   146,   147,   134,    66,    85,   127,    61,   141,   156,
+     157,     9,    38,    49,    72,   135,   136,   137,   138,    49,
+      70,   136,    11,    12,   142,    66,    71,     3,    67,   173,
+     174,    11,    12,   142,    45,    11,    12,   128,    15,    88,
+     141,   156,   174,     3,    59,    66,    69,   129,   130,   141,
+       1,     4,     5,     6,     9,    11,    12,    13,    14,    39,
+      42,    43,    44,    46,    47,    48,    50,    51,    52,    57,
+      60,    64,    65,    67,    73,   107,   108,   109,   111,   112,
+     113,   114,   115,   116,   140,   142,   144,   145,   158,   159,
+     168,   169,   170,   172,   173,   175,   176,    67,   142,    68,
+     174,    66,    71,   142,    15,   107,    39,    67,   110,    39,
+      67,   108,   109,   142,    11,   106,   107,   144,    67,    81,
+      67,    81,    67,   110,    67,    69,   100,   107,   107,   107,
+       9,    61,    69,    75,   106,   136,    67,    16,    17,    18,
+      19,    20,    21,    54,    55,    56,    57,    58,    59,    60,
+      61,    62,    63,    14,    15,    37,    40,    41,    74,    75,
+     107,    39,   110,   110,    67,    71,    72,   108,   169,   170,
+      11,    12,   136,   139,   143,   148,   149,   150,   129,   107,
+       7,     8,   171,   142,   107,   161,   162,   163,    50,   142,
+      71,    72,    71,    72,   107,    67,   100,   167,   107,   167,
+      49,   163,   106,    80,   106,   163,   107,   160,   164,   165,
+      68,   141,    82,   107,   107,   107,   107,   107,   107,   107,
+     107,   107,   107,   107,   107,   107,   107,   107,   107,   107,
+     142,    75,   142,    75,   142,    27,    58,   106,   142,   163,
+     163,   148,   162,    68,   168,   141,    68,    28,    71,   107,
+      28,    71,    68,   162,    68,   107,    68,    71,   106,    71,
+      11,    12,    68,    68,     1,    22,    24,    29,    30,    31,
+      32,    34,    35,    36,    66,    91,    92,    93,    95,    96,
+      97,    98,    99,   100,   101,   102,   103,   106,   117,   136,
+      68,    70,    72,    71,    76,    68,   106,    72,   110,   106,
+     106,    58,   106,    27,    76,    68,    68,    68,    71,    72,
+     143,    89,   150,   171,   161,    72,   107,    68,   107,   132,
+     132,    66,    67,    67,    67,    78,    67,    67,    66,    66,
+      66,   106,   101,    70,   141,   152,   153,   101,    66,    69,
+     110,    68,   107,   160,    68,    68,   107,   163,    76,    76,
+     106,    27,    76,    58,    76,   106,   110,   100,    68,    72,
+     151,     1,    66,    90,   100,    68,    71,   166,    71,    68,
+      71,    68,   101,   106,   106,   106,    91,   106,   121,   122,
+     139,   154,   155,    11,    12,   123,   124,   154,    66,   143,
+      66,    71,   105,   163,    68,    76,    58,    76,   106,   107,
+     106,    76,   163,    42,   108,    68,   107,   131,   142,    68,
+      68,    68,    29,    66,   141,    15,    71,    33,    15,   152,
+      25,    26,   104,   119,   136,    68,   106,   107,    76,    76,
+      76,    68,   106,   166,   166,    72,    91,    78,    67,   121,
+     143,   107,   123,   107,   107,     4,    27,    60,    64,    65,
+      67,   120,   174,   177,    72,   152,    91,   118,   119,    76,
+      76,    72,    68,   107,    23,    94,    91,   106,    66,    68,
+     120,     4,     4,     4,   177,    27,    72,    19,    20,    21,
+      55,    56,    57,    58,    59,    60,    61,    62,    63,    66,
+     118,    70,   118,    68,    91,    68,   121,    79,    72,    68,
+      72,   120,    67,   177,   177,   177,   177,   177,   177,   177,
+     177,   177,   177,   177,   177,    66,    68,    91,    72,    78,
+      91
 };
 
 /* YYR1[RULE-NUM] -- Symbol kind of the left-hand side of rule RULE-NUM.  */
 static const yytype_uint8 yyr1[] =
 {
-       0,    78,    79,    80,    80,    81,    81,    82,    83,    84,
-      85,    85,    86,    86,    86,    87,    87,    89,    90,    88,
-      91,    91,    91,    91,    91,    92,    93,    94,    94,    95,
-      96,    95,    98,    97,    99,    99,   100,   100,   100,   101,
-     101,   102,   102,   103,   103,   104,   104,   105,   105,   105,
-     106,   106,   106,   107,   107,   108,   108,   109,   110,   111,
-     111,   112,   112,   113,   113,   115,   114,   116,   116,   116,
-     117,   118,   117,   119,   119,   120,   121,   122,   122,   124,
-     123,   125,   125,   125,   125,   126,   126,   126,   126,   126,
-     126,   126,   126,   126,   126,   128,   127,   130,   129,   132,
-     131,   133,   133,   133,   134,   134,   136,   135,   137,   137,
-     138,   138,   140,   139,   141,   141,   141,   142,   142,   142,
-     142,   142,   143,   143,   144,   144,   144,   144,   144,   144,
-     144,   144,   144,   144,   144,   144,   144,   144,   144,   144,
-     144,   144,   144,   145,   145,   146,   147,   147,   147,   147,
-     147,   147,   147,   147,   147,   147,   147,   147,   147,   147,
-     147,   147,   147,   147,   147,   147,   147,   147,   147,   147,
-     147,   147,   147,   147,   147,   147,   147,   147,   147,   147,
-     148,   148,   149,   149,   149,   150,   150,   151,   151,   152,
-     152,   152,   153,   153,   154,   155,   156,   156,   157,   157,
-     157,   157,   158,   157,   157,   157,   157,   157,   157,   157,
-     157,   157,   157,   157,   157,   157,   157,   157,   159,   157,
-     157,   157,   157,   157,   157,   160,   160,   162,   161,   163,
-     163,   164,   165,   167,   166,   168,   168,   169,   170,   170,
-     170,   171,   171,   172,   173,   173,   175,   174,   176,   174,
-     174,   174,   177,   174,   178,   174,   179,   174,   180,   174,
-     181,   174,   182,   182,   183,   183,   183,   183,   184,   185,
-     185
+       0,    77,    78,    79,    80,    81,    82,    83,    84,    84,
+      85,    85,    86,    86,    86,    86,    86,    88,    89,    87,
+      90,    90,    90,    91,    91,    91,    91,    91,    91,    91,
+      91,    91,    91,    91,    91,    92,    92,    93,    94,    94,
+      95,    96,    97,    98,    99,   100,   101,   101,   101,   101,
+     102,   103,   104,   105,   105,   106,   106,   107,   107,   107,
+     107,   107,   107,   107,   107,   107,   107,   107,   107,   107,
+     107,   107,   107,   107,   107,   107,   107,   107,   107,   107,
+     107,   107,   107,   107,   107,   107,   107,   107,   108,   109,
+     109,   109,   109,   109,   109,   109,   109,   109,   109,   109,
+     109,   109,   109,   109,   109,   109,   109,   109,   109,   109,
+     109,   109,   109,   109,   109,   109,   109,   109,   109,   109,
+     109,   109,   110,   111,   111,   111,   111,   111,   111,   111,
+     111,   111,   112,   113,   114,   115,   116,   116,   117,   118,
+     118,   118,   119,   119,   119,   119,   119,   120,   120,   121,
+     121,   122,   122,   123,   123,   123,   124,   124,   125,   126,
+     127,   128,   127,   129,   129,   130,   131,   132,   132,   133,
+     134,   134,   135,   135,   136,   136,   137,   137,   138,   138,
+     138,   139,   139,   140,   141,   141,   142,   142,   143,   143,
+     144,   144,   145,   145,   145,   145,   146,   147,   148,   148,
+     148,   149,   149,   150,   150,   150,   151,   151,   152,   152,
+     153,   153,   154,   155,   156,   156,   157,   157,   158,   159,
+     160,   161,   161,   162,   162,   163,   163,   163,   164,   164,
+     165,   165,   165,   166,   166,   167,   167,   168,   168,   169,
+     170,   171,   171,   172,   172,   172,   172,   173,   173,   174,
+     174,   174,   175,   176,   177,   177,   177,   177,   177,   177,
+     177,   177,   177,   177,   177,   177,   177,   177,   177,   177,
+     177
 };
 
 /* YYR2[RULE-NUM] -- Number of symbols on the right-hand side of rule RULE-NUM.  */
 static const yytype_int8 yyr2[] =
 {
-       0,     2,     1,     3,     0,     0,     1,     4,     1,     1,
-       0,     1,     1,     1,     1,     1,     1,     0,     0,     9,
-       1,     3,     1,     1,     1,     2,     2,     1,     3,     0,
-       0,     5,     0,     7,     1,     1,     1,     2,     2,     1,
-       0,     1,     2,     1,     2,     0,     5,     2,     4,     1,
-       0,     1,     2,     1,     3,     0,     2,     2,     4,     1,
-       0,     1,     3,     2,     4,     0,     4,     1,     1,     1,
-       0,     0,     5,     2,     4,     3,     3,     1,     3,     0,
-       4,     0,     2,     2,     3,     2,     1,     1,     1,     1,
-       1,     1,     1,     2,     2,     0,     6,     0,     8,     0,
-      10,     1,     1,     1,     1,     3,     0,     8,     0,     1,
-       1,     1,     0,    10,     2,     2,     0,     3,     5,     4,
-       4,     2,     1,     1,     3,     3,     3,     3,     3,     3,
-       3,     3,     3,     3,     3,     3,     3,     3,     3,     1,
-       2,     2,     2,     1,     3,     1,     2,     3,     3,     5,
-       3,     3,     3,     3,     3,     3,     3,     3,     3,     3,
+       0,     2,     0,     0,     0,     0,     0,     1,     3,     0,
+       0,     1,     1,     3,     1,     1,     1,     0,     0,     9,
+       1,     1,     1,     2,     1,     1,     1,     1,     1,     1,
+       1,     1,     1,     2,     2,     2,     3,     6,     0,     2,
+       6,     8,    10,     8,     6,     4,     0,     2,     2,     3,
+       1,     3,     1,     0,     4,     1,     3,     2,     3,     3,
+       5,     3,     3,     3,     3,     3,     3,     3,     3,     3,
        3,     3,     3,     3,     3,     3,     2,     2,     2,     2,
-       2,     2,     2,     2,     1,     1,     1,     1,     1,     1,
-       2,     3,     0,     1,     2,     1,     2,     1,     3,     0,
-       1,     2,     1,     3,     3,     1,     1,     2,     1,     1,
-       1,     1,     0,     5,     3,     3,     6,     7,     8,     7,
-       5,     6,     5,     4,     1,     3,     1,     1,     0,     6,
-       3,     5,     4,     4,     4,     1,     3,     0,     3,     2,
-       4,     7,     9,     0,     3,     0,     3,     1,     1,     3,
-       3,     1,     2,     3,     0,     3,     0,     5,     0,     5,
-       6,     6,     0,     5,     0,     5,     0,     8,     0,     7,
-       0,     8,     3,     3,     1,     2,     3,     3,     6,     0,
+       2,     2,     1,     1,     1,     1,     1,     1,     1,     1,
+       1,     1,     1,     1,     3,     1,     1,     5,     3,     3,
+       3,     5,     5,     4,     5,     6,     7,     8,     7,     5,
+       6,     6,     8,     7,     5,     3,     5,     4,     6,     4,
+       5,     5,     1,     4,     4,     6,     6,     4,     4,     7,
+       6,     7,     7,     9,     3,     3,     2,     4,     4,     2,
+       2,     0,     3,     5,     4,     4,     2,     1,     1,     0,
+       1,     1,     1,     1,     1,     1,     1,     3,     3,     4,
+       0,     0,     5,     1,     3,     2,     3,     0,     3,     2,
+       0,     2,     1,     0,     1,     2,     1,     0,     1,     2,
+       2,     1,     2,     4,     0,     1,     1,     1,     1,     1,
+       3,     3,     1,     2,     3,     3,     4,     2,     0,     1,
+       2,     1,     3,     2,     4,     1,     0,     5,     1,     3,
+       2,     4,     3,     3,     1,     3,     2,     4,     1,     2,
+       3,     1,     2,     1,     3,     0,     1,     2,     1,     3,
+       0,     1,     2,     0,     3,     1,     3,     1,     1,     1,
+       3,     1,     3,     1,     1,     2,     2,     1,     2,     1,
+       3,     3,     1,     1,     3,     3,     3,     3,     3,     3,
+       3,     3,     3,     3,     3,     3,     3,     1,     2,     2,
        2
 };
 
@@ -1458,7 +1500,7 @@ enum { YYENOMEM = -2 };
       }                                                           \
     else                                                          \
       {                                                           \
-        yyerror (YY_("syntax error: cannot back up")); \
+        yyerror (&yylloc, yyscanner, YY_("syntax error: cannot back up")); \
         YYERROR;                                                  \
       }                                                           \
   while (0)
@@ -1466,6 +1508,32 @@ enum { YYENOMEM = -2 };
 /* Backward compatibility with an undocumented macro.
    Use YYerror or YYUNDEF. */
 #define YYERRCODE YYUNDEF
+
+/* YYLLOC_DEFAULT -- Set CURRENT to span from RHS[1] to RHS[N].
+   If N is 0, then set CURRENT to the empty location which ends
+   the previous symbol: RHS[0] (always defined).  */
+
+#ifndef YYLLOC_DEFAULT
+# define YYLLOC_DEFAULT(Current, Rhs, N)                                \
+    do                                                                  \
+      if (N)                                                            \
+        {                                                               \
+          (Current).first_line   = YYRHSLOC (Rhs, 1).first_line;        \
+          (Current).first_column = YYRHSLOC (Rhs, 1).first_column;      \
+          (Current).last_line    = YYRHSLOC (Rhs, N).last_line;         \
+          (Current).last_column  = YYRHSLOC (Rhs, N).last_column;       \
+        }                                                               \
+      else                                                              \
+        {                                                               \
+          (Current).first_line   = (Current).last_line   =              \
+            YYRHSLOC (Rhs, 0).last_line;                                \
+          (Current).first_column = (Current).last_column =              \
+            YYRHSLOC (Rhs, 0).last_column;                              \
+        }                                                               \
+    while (0)
+#endif
+
+#define YYRHSLOC(Rhs, K) ((Rhs)[K])
 
 
 /* Enable debugging if requested.  */
@@ -1483,6 +1551,63 @@ do {                                            \
 } while (0)
 
 
+/* YYLOCATION_PRINT -- Print the location on the stream.
+   This macro was not mandated originally: define only if we know
+   we won't break user code: when these are the locations we know.  */
+
+# ifndef YYLOCATION_PRINT
+
+#  if defined YY_LOCATION_PRINT
+
+   /* Temporary convenience wrapper in case some people defined the
+      undocumented and private YY_LOCATION_PRINT macros.  */
+#   define YYLOCATION_PRINT(File, Loc)  YY_LOCATION_PRINT(File, *(Loc))
+
+#  elif defined YYLTYPE_IS_TRIVIAL && YYLTYPE_IS_TRIVIAL
+
+/* Print *YYLOCP on YYO.  Private, do not rely on its existence. */
+
+YY_ATTRIBUTE_UNUSED
+static int
+yy_location_print_ (FILE *yyo, YYLTYPE const * const yylocp)
+{
+  int res = 0;
+  int end_col = 0 != yylocp->last_column ? yylocp->last_column - 1 : 0;
+  if (0 <= yylocp->first_line)
+    {
+      res += YYFPRINTF (yyo, "%d", yylocp->first_line);
+      if (0 <= yylocp->first_column)
+        res += YYFPRINTF (yyo, ".%d", yylocp->first_column);
+    }
+  if (0 <= yylocp->last_line)
+    {
+      if (yylocp->first_line < yylocp->last_line)
+        {
+          res += YYFPRINTF (yyo, "-%d", yylocp->last_line);
+          if (0 <= end_col)
+            res += YYFPRINTF (yyo, ".%d", end_col);
+        }
+      else if (0 <= end_col && yylocp->first_column < end_col)
+        res += YYFPRINTF (yyo, "-%d", end_col);
+    }
+  return res;
+}
+
+#   define YYLOCATION_PRINT  yy_location_print_
+
+    /* Temporary convenience wrapper in case some people defined the
+       undocumented and private YY_LOCATION_PRINT macros.  */
+#   define YY_LOCATION_PRINT(File, Loc)  YYLOCATION_PRINT(File, &(Loc))
+
+#  else
+
+#   define YYLOCATION_PRINT(File, Loc) ((void) 0)
+    /* Temporary convenience wrapper in case some people defined the
+       undocumented and private YY_LOCATION_PRINT macros.  */
+#   define YY_LOCATION_PRINT  YYLOCATION_PRINT
+
+#  endif
+# endif /* !defined YYLOCATION_PRINT */
 
 
 # define YY_SYMBOL_PRINT(Title, Kind, Value, Location)                    \
@@ -1491,7 +1616,7 @@ do {                                                                      \
     {                                                                     \
       YYFPRINTF (stderr, "%s ", Title);                                   \
       yy_symbol_print (stderr,                                            \
-                  Kind, Value); \
+                  Kind, Value, Location, yyscanner); \
       YYFPRINTF (stderr, "\n");                                           \
     }                                                                     \
 } while (0)
@@ -1503,10 +1628,12 @@ do {                                                                      \
 
 static void
 yy_symbol_value_print (FILE *yyo,
-                       yysymbol_kind_t yykind, YYSTYPE const * const yyvaluep)
+                       yysymbol_kind_t yykind, YYSTYPE const * const yyvaluep, YYLTYPE const * const yylocationp, void* yyscanner)
 {
   FILE *yyoutput = yyo;
   YY_USE (yyoutput);
+  YY_USE (yylocationp);
+  YY_USE (yyscanner);
   if (!yyvaluep)
     return;
   YY_IGNORE_MAYBE_UNINITIALIZED_BEGIN
@@ -1521,12 +1648,14 @@ yy_symbol_value_print (FILE *yyo,
 
 static void
 yy_symbol_print (FILE *yyo,
-                 yysymbol_kind_t yykind, YYSTYPE const * const yyvaluep)
+                 yysymbol_kind_t yykind, YYSTYPE const * const yyvaluep, YYLTYPE const * const yylocationp, void* yyscanner)
 {
   YYFPRINTF (yyo, "%s %s (",
              yykind < YYNTOKENS ? "token" : "nterm", yysymbol_name (yykind));
 
-  yy_symbol_value_print (yyo, yykind, yyvaluep);
+  YYLOCATION_PRINT (yyo, yylocationp);
+  YYFPRINTF (yyo, ": ");
+  yy_symbol_value_print (yyo, yykind, yyvaluep, yylocationp, yyscanner);
   YYFPRINTF (yyo, ")");
 }
 
@@ -1559,8 +1688,8 @@ do {                                                            \
 `------------------------------------------------*/
 
 static void
-yy_reduce_print (yy_state_t *yyssp, YYSTYPE *yyvsp,
-                 int yyrule)
+yy_reduce_print (yy_state_t *yyssp, YYSTYPE *yyvsp, YYLTYPE *yylsp,
+                 int yyrule, void* yyscanner)
 {
   int yylno = yyrline[yyrule];
   int yynrhs = yyr2[yyrule];
@@ -1573,7 +1702,8 @@ yy_reduce_print (yy_state_t *yyssp, YYSTYPE *yyvsp,
       YYFPRINTF (stderr, "   $%d = ", yyi + 1);
       yy_symbol_print (stderr,
                        YY_ACCESSING_SYMBOL (+yyssp[yyi + 1 - yynrhs]),
-                       &yyvsp[(yyi + 1) - (yynrhs)]);
+                       &yyvsp[(yyi + 1) - (yynrhs)],
+                       &(yylsp[(yyi + 1) - (yynrhs)]), yyscanner);
       YYFPRINTF (stderr, "\n");
     }
 }
@@ -1581,7 +1711,7 @@ yy_reduce_print (yy_state_t *yyssp, YYSTYPE *yyvsp,
 # define YY_REDUCE_PRINT(Rule)          \
 do {                                    \
   if (yydebug)                          \
-    yy_reduce_print (yyssp, yyvsp, Rule); \
+    yy_reduce_print (yyssp, yyvsp, yylsp, Rule, yyscanner); \
 } while (0)
 
 /* Nonzero means print parse trace.  It is left uninitialized so that
@@ -1610,6 +1740,44 @@ int yydebug;
 #ifndef YYMAXDEPTH
 # define YYMAXDEPTH 10000
 #endif
+/* Parser data structure.  */
+struct yypstate
+  {
+    /* Number of syntax errors so far.  */
+    int yynerrs;
+
+    yy_state_fast_t yystate;
+    /* Number of tokens to shift before error messages enabled.  */
+    int yyerrstatus;
+
+    /* Refer to the stacks through separate pointers, to allow yyoverflow
+       to reallocate them elsewhere.  */
+
+    /* Their size.  */
+    YYPTRDIFF_T yystacksize;
+
+    /* The state stack: array, bottom, top.  */
+    yy_state_t yyssa[YYINITDEPTH];
+    yy_state_t *yyss;
+    yy_state_t *yyssp;
+
+    /* The semantic value stack: array, bottom, top.  */
+    YYSTYPE yyvsa[YYINITDEPTH];
+    YYSTYPE *yyvs;
+    YYSTYPE *yyvsp;
+
+    /* The location stack: array, bottom, top.  */
+    YYLTYPE yylsa[YYINITDEPTH];
+    YYLTYPE *yyls;
+    YYLTYPE *yylsp;
+
+    yy_state_t yyesa[20];
+    yy_state_t *yyes;
+    YYPTRDIFF_T yyes_capacity;
+    /* Whether this instance has not started parsing yet.
+     * If 2, it corresponds to a finished parsing.  */
+    int yynew;
+  };
 
 
 /* Given a state stack such that *YYBOTTOM is its bottom, such that
@@ -1858,11 +2026,9 @@ yy_lac (yy_state_t *yyesa, yy_state_t **yyes,
 /* Context of a parse error.  */
 typedef struct
 {
-  yy_state_t *yyssp;
-  yy_state_t *yyesa;
-  yy_state_t **yyes;
-  YYPTRDIFF_T *yyes_capacity;
+  yypstate* yyps;
   yysymbol_kind_t yytoken;
+  YYLTYPE *yylloc;
 } yypcontext_t;
 
 /* Put in YYARG at most YYARGN of the expected tokens given the
@@ -1872,8 +2038,8 @@ typedef struct
    Return 0 if there are more than YYARGN expected tokens, yet fill
    YYARG up to YYARGN. */
 static int
-yypcontext_expected_tokens (const yypcontext_t *yyctx,
-                            yysymbol_kind_t yyarg[], int yyargn)
+yypstate_expected_tokens (yypstate *yyps,
+                          yysymbol_kind_t yyarg[], int yyargn)
 {
   /* Actual size of YYARG. */
   int yycount = 0;
@@ -1883,7 +2049,7 @@ yypcontext_expected_tokens (const yypcontext_t *yyctx,
     {
       yysymbol_kind_t yysym = YY_CAST (yysymbol_kind_t, yyx);
       if (yysym != YYSYMBOL_YYerror && yysym != YYSYMBOL_YYUNDEF)
-        switch (yy_lac (yyctx->yyesa, yyctx->yyes, yyctx->yyes_capacity, yyctx->yyssp, yysym))
+        switch (yy_lac (yyps->yyesa, &yyps->yyes, &yyps->yyes_capacity, yyps->yyssp, yysym))
           {
           case YYENOMEM:
             return YYENOMEM;
@@ -1904,6 +2070,13 @@ yypcontext_expected_tokens (const yypcontext_t *yyctx,
 }
 
 
+/* Similar to the previous function.  */
+static int
+yypcontext_expected_tokens (const yypcontext_t *yyctx,
+                            yysymbol_kind_t yyarg[], int yyargn)
+{
+  return yypstate_expected_tokens (yyctx->yyps, yyarg, yyargn);
+}
 
 
 #ifndef yystrlen
@@ -2086,9 +2259,11 @@ yysyntax_error (YYPTRDIFF_T *yymsg_alloc, char **yymsg,
 
 static void
 yydestruct (const char *yymsg,
-            yysymbol_kind_t yykind, YYSTYPE *yyvaluep)
+            yysymbol_kind_t yykind, YYSTYPE *yyvaluep, YYLTYPE *yylocationp, void* yyscanner)
 {
   YY_USE (yyvaluep);
+  YY_USE (yylocationp);
+  YY_USE (yyscanner);
   if (!yymsg)
     yymsg = "Deleting";
   YY_SYMBOL_PRINT (yymsg, yykind, yyvaluep, yylocationp);
@@ -2099,47 +2274,108 @@ yydestruct (const char *yymsg,
 }
 
 
+
+
+
+#define yynerrs yyps->yynerrs
+#define yystate yyps->yystate
+#define yyerrstatus yyps->yyerrstatus
+#define yyssa yyps->yyssa
+#define yyss yyps->yyss
+#define yyssp yyps->yyssp
+#define yyvsa yyps->yyvsa
+#define yyvs yyps->yyvs
+#define yyvsp yyps->yyvsp
+#define yylsa yyps->yylsa
+#define yyls yyps->yyls
+#define yylsp yyps->yylsp
+#define yystacksize yyps->yystacksize
+#define yyesa yyps->yyesa
+#define yyes yyps->yyes
+#define yyes_capacity yyps->yyes_capacity
+
+/* Initialize the parser data structure.  */
+static void
+yypstate_clear (yypstate *yyps)
+{
+  yynerrs = 0;
+  yystate = 0;
+  yyerrstatus = 0;
+
+  yyssp = yyss;
+  yyvsp = yyvs;
+  yylsp = yyls;
+
+  /* Initialize the state stack, in case yypcontext_expected_tokens is
+     called before the first call to yyparse. */
+  *yyssp = 0;
+  yyps->yynew = 1;
+}
+
+/* Initialize the parser data structure.  */
+yypstate *
+yypstate_new (void)
+{
+  yypstate *yyps;
+  yyps = YY_CAST (yypstate *, YYMALLOC (sizeof *yyps));
+  if (!yyps)
+    return YY_NULLPTR;
+  yystacksize = YYINITDEPTH;
+  yyss = yyssa;
+  yyvs = yyvsa;
+  yyls = yylsa;
+  yyes = yyesa;
+  yyes_capacity = 20;
+  if (YYMAXDEPTH < yyes_capacity)
+    yyes_capacity = YYMAXDEPTH;
+  yypstate_clear (yyps);
+  return yyps;
+}
+
+void
+yypstate_delete (yypstate *yyps)
+{
+  if (yyps)
+    {
+#ifndef yyoverflow
+      /* If the stack was reallocated but the parse did not complete, then the
+         stack still needs to be freed.  */
+      if (yyss != yyssa)
+        YYSTACK_FREE (yyss);
+#endif
+      if (yyes != yyesa)
+        YYSTACK_FREE (yyes);
+      YYFREE (yyps);
+    }
+}
+
+
+
+/*---------------.
+| yypush_parse.  |
+`---------------*/
+
+int
+yypush_parse (yypstate *yyps,
+              int yypushed_char, YYSTYPE const *yypushed_val, YYLTYPE *yypushed_loc, void* yyscanner)
+{
 /* Lookahead token kind.  */
 int yychar;
 
+
 /* The semantic value of the lookahead symbol.  */
-YYSTYPE yylval;
-/* Number of syntax errors so far.  */
-int yynerrs;
+/* Default value used for initialization, for pacifying older GCCs
+   or non-GCC compilers.  */
+YY_INITIAL_VALUE (static YYSTYPE yyval_default;)
+YYSTYPE yylval YY_INITIAL_VALUE (= yyval_default);
 
-
-
-
-/*----------.
-| yyparse.  |
-`----------*/
-
-int
-yyparse (void)
-{
-    yy_state_fast_t yystate = 0;
-    /* Number of tokens to shift before error messages enabled.  */
-    int yyerrstatus = 0;
-
-    /* Refer to the stacks through separate pointers, to allow yyoverflow
-       to reallocate them elsewhere.  */
-
-    /* Their size.  */
-    YYPTRDIFF_T yystacksize = YYINITDEPTH;
-
-    /* The state stack: array, bottom, top.  */
-    yy_state_t yyssa[YYINITDEPTH];
-    yy_state_t *yyss = yyssa;
-    yy_state_t *yyssp = yyss;
-
-    /* The semantic value stack: array, bottom, top.  */
-    YYSTYPE yyvsa[YYINITDEPTH];
-    YYSTYPE *yyvs = yyvsa;
-    YYSTYPE *yyvsp = yyvs;
-
-    yy_state_t yyesa[20];
-    yy_state_t *yyes = yyesa;
-    YYPTRDIFF_T yyes_capacity = 20 < YYMAXDEPTH ? 20 : YYMAXDEPTH;
+/* Location data for the lookahead symbol.  */
+static YYLTYPE yyloc_default
+# if defined YYLTYPE_IS_TRIVIAL && YYLTYPE_IS_TRIVIAL
+  = { 1, 1, 1, 1 }
+# endif
+;
+YYLTYPE yylloc = yyloc_default;
 
   /* Whether LAC context is established.  A Boolean.  */
   int yy_lac_established = 0;
@@ -2151,22 +2387,41 @@ yyparse (void)
   /* The variables used to return semantic value and location from the
      action routines.  */
   YYSTYPE yyval;
+  YYLTYPE yyloc;
+
+  /* The locations where the error started and ended.  */
+  YYLTYPE yyerror_range[3];
 
   /* Buffer for error messages, and its allocated size.  */
   char yymsgbuf[128];
   char *yymsg = yymsgbuf;
   YYPTRDIFF_T yymsg_alloc = sizeof yymsgbuf;
 
-#define YYPOPSTACK(N)   (yyvsp -= (N), yyssp -= (N))
+#define YYPOPSTACK(N)   (yyvsp -= (N), yyssp -= (N), yylsp -= (N))
 
   /* The number of symbols on the RHS of the reduced rule.
      Keep to zero when no symbol should be popped.  */
   int yylen = 0;
 
+  switch (yyps->yynew)
+    {
+    case 0:
+      yyn = yypact[yystate];
+      goto yyread_pushed_token;
+
+    case 2:
+      yypstate_clear (yyps);
+      break;
+
+    default:
+      break;
+    }
+
   YYDPRINTF ((stderr, "Starting parse\n"));
 
   yychar = YYEMPTY; /* Cause a token to be read.  */
 
+  yylsp[0] = *yypushed_loc;
   goto yysetstate;
 
 
@@ -2205,6 +2460,7 @@ yysetstate:
            memory.  */
         yy_state_t *yyss1 = yyss;
         YYSTYPE *yyvs1 = yyvs;
+        YYLTYPE *yyls1 = yyls;
 
         /* Each stack pointer address is followed by the size of the
            data in use in that stack, in bytes.  This used to be a
@@ -2213,9 +2469,11 @@ yysetstate:
         yyoverflow (YY_("memory exhausted"),
                     &yyss1, yysize * YYSIZEOF (*yyssp),
                     &yyvs1, yysize * YYSIZEOF (*yyvsp),
+                    &yyls1, yysize * YYSIZEOF (*yylsp),
                     &yystacksize);
         yyss = yyss1;
         yyvs = yyvs1;
+        yyls = yyls1;
       }
 # else /* defined YYSTACK_RELOCATE */
       /* Extend the stack our own way.  */
@@ -2234,6 +2492,7 @@ yysetstate:
           YYNOMEM;
         YYSTACK_RELOCATE (yyss_alloc, yyss);
         YYSTACK_RELOCATE (yyvs_alloc, yyvs);
+        YYSTACK_RELOCATE (yyls_alloc, yyls);
 #  undef YYSTACK_RELOCATE
         if (yyss1 != yyssa)
           YYSTACK_FREE (yyss1);
@@ -2242,6 +2501,7 @@ yysetstate:
 
       yyssp = yyss + yysize - 1;
       yyvsp = yyvs + yysize - 1;
+      yylsp = yyls + yysize - 1;
 
       YY_IGNORE_USELESS_CAST_BEGIN
       YYDPRINTF ((stderr, "Stack size increased to %ld\n",
@@ -2277,8 +2537,20 @@ yybackup:
   /* YYCHAR is either empty, or end-of-input, or a valid lookahead.  */
   if (yychar == YYEMPTY)
     {
+      if (!yyps->yynew)
+        {
+          YYDPRINTF ((stderr, "Return for a new token:\n"));
+          yyresult = YYPUSH_MORE;
+          goto yypushreturn;
+        }
+      yyps->yynew = 0;
+yyread_pushed_token:
       YYDPRINTF ((stderr, "Reading a token\n"));
-      yychar = yylex ();
+      yychar = yypushed_char;
+      if (yypushed_val)
+        yylval = *yypushed_val;
+      if (yypushed_loc)
+        yylloc = *yypushed_loc;
     }
 
   if (yychar <= YYEOF)
@@ -2295,6 +2567,7 @@ yybackup:
          loop in error recovery. */
       yychar = YYUNDEF;
       yytoken = YYSYMBOL_YYerror;
+      yyerror_range[1] = yylloc;
       goto yyerrlab1;
     }
   else
@@ -2332,6 +2605,7 @@ yybackup:
   YY_IGNORE_MAYBE_UNINITIALIZED_BEGIN
   *++yyvsp = yylval;
   YY_IGNORE_MAYBE_UNINITIALIZED_END
+  *++yylsp = yylloc;
 
   /* Discard the shifted token.  */
   yychar = YYEMPTY;
@@ -2366,4048 +2640,1378 @@ yyreduce:
      GCC warning that YYVAL may be used uninitialized.  */
   yyval = yyvsp[1-yylen];
 
-
+  /* Default location. */
+  YYLLOC_DEFAULT (yyloc, (yylsp - yylen), yylen);
+  yyerror_range[1] = yyloc;
   YY_REDUCE_PRINT (yyn);
   {
     int yychar_backup = yychar;
     switch (yyn)
       {
-  case 2: /* all: program  */
-#line 217 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-          { rule_program((yyval.node)); }
-#line 2379 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 2: /* loop_start: %empty  */
+#line 243 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                   { (yyval.number) = rule_loop_open(); }
+#line 2655 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 3: /* program: program def possible_semi_colon  */
-#line 221 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                  { CREATE_TWO_VALUES((yyval.node), 0, (yyvsp[-2].node), (yyvsp[-1].node)); }
-#line 2385 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 3: /* foreach_start: %empty  */
+#line 244 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                      { (yyval.number) = rule_foreach_open(); }
+#line 2661 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 4: /* program: %empty  */
-#line 222 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                        { (yyval.node) = 0; }
-#line 2391 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 4: /* block_start: %empty  */
+#line 245 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                    { (yyval.number) = rule_block_open(); }
+#line 2667 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 6: /* possible_semi_colon: ';'  */
-#line 227 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-        { yywarn("Extra ';'. Ignored."); }
-#line 2397 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 5: /* special_context_start: %empty  */
+#line 246 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                              { (yyval.number) = rule_special_context_open(); }
+#line 2673 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 7: /* inheritance: type_modifier_list L_INHERIT string_con1 ';'  */
-#line 231 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                               { if (rule_inheritence(&(yyval.node), (yyvsp[-3].number), (yyvsp[-1].string))) { YYACCEPT; } }
-#line 2403 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 6: /* dollar_start: %empty  */
+#line 247 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                     { (yyval.contextp) = rule_dollar_open(); }
+#line 2679 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 8: /* real: L_REAL  */
-#line 235 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-         { CREATE_REAL((yyval.node), (yyvsp[0].real)); }
-#line 2409 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 7: /* all: program  */
+#line 256 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+           { rule_program((yyvsp[0].node)); }
+#line 2685 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 9: /* number: L_NUMBER  */
-#line 239 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-           { CREATE_NUMBER((yyval.node), (yyvsp[0].number)); }
-#line 2415 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 8: /* program: program def opt_semicolon  */
+#line 261 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                   { rule_program_append(&(yyval.node), (yyvsp[-2].node), (yyvsp[-1].node)); }
+#line 2691 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 10: /* optional_star: %empty  */
-#line 243 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                        { (yyval.number) = 0; }
-#line 2421 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 9: /* program: %empty  */
+#line 262 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                   { (yyval.node) = 0; }
+#line 2697 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 11: /* optional_star: '*'  */
-#line 244 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                { (yyval.number) = TYPE_MOD_ARRAY; }
-#line 2427 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 11: /* opt_semicolon: ';'  */
+#line 268 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+         { rule_opt_semicolon(); }
+#line 2703 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 12: /* block_or_semi: block  */
-#line 249 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-          {
-            (yyval.node) = (yyvsp[0].decl).node;
-            if (!(yyval.node)) {
-              CREATE_RETURN((yyval.node), 0);
-            }
-          }
-#line 2438 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 13: /* def: type name_list ';'  */
+#line 280 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                        { rule_def_global_var((yyvsp[-2].number)); (yyval.node) = 0; }
+#line 2709 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 13: /* block_or_semi: ';'  */
-#line 255 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-          { (yyval.node) = 0; }
-#line 2444 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 14: /* block_or_semi: error  */
-#line 256 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-          { (yyval.node) = 0; }
-#line 2450 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 15: /* identifier: L_DEFINED_NAME  */
-#line 260 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                  { (yyval.string) = scratch_copy((yyvsp[0].ihe)->name); }
-#line 2456 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 17: /* $@1: %empty  */
-#line 265 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                  { (yyvsp[-2].number) = rule_func_type((yyvsp[-2].number), (yyvsp[-1].number), (yyvsp[0].string)); }
-#line 2462 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 17: /* @1: %empty  */
+#line 306 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { (yyval.number) = rule_func_type((yyvsp[-2].number), (yyvsp[-1].number), (yyvsp[0].string)); }
+#line 2715 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
   case 18: /* @2: %empty  */
-#line 266 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                  { (yyval.number) = rule_func_proto((yyvsp[-6].number), (yyvsp[-5].number), &(yyvsp[-4].string), (yyvsp[-1].argument)); }
-#line 2468 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 19: /* function: type optional_star identifier $@1 '(' argument ')' @2 block_or_semi  */
-#line 267 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                  { rule_func(&(yyval.node), (yyvsp[-8].number), (yyvsp[-7].number), (yyvsp[-6].string), (yyvsp[-3].argument), &(yyvsp[-1].number), &(yyvsp[0].node)); }
-#line 2474 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 21: /* def: type name_list ';'  */
-#line 273 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                  {
-                                    if (!((yyvsp[-2].number) & ~(DECL_MODS)) && (pragmas & PRAGMA_STRICT_TYPES))
-                                      yyerror("Missing type for global variable declaration");
-                                    (yyval.node) = 0;
-                                  }
-#line 2484 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 25: /* modifier_change: type_modifier_list ':'  */
-#line 285 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                  {
-                                    if (!(yyvsp[-1].number))
-                                      yyerror("modifier list may not be empty.");
-
-                                    if ((yyvsp[-1].number) & FUNC_VARARGS) {
-                                      yyerror("Illegal modifier 'varargs' in global modifier list.");
-                                      (yyvsp[-1].number) &= ~FUNC_VARARGS;
-                                    }
+#line 308 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { (yyval.number) = rule_func_proto((yyvsp[-3].number), (yyvsp[-5].number), (yyvsp[-4].string), &(yyvsp[-4].shared_string), (yyvsp[-1].argument)); }
+#line 2721 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-                                    if (!((yyvsp[-1].number) & DECL_ACCESS)) (yyvsp[-1].number) |= DECL_PUBLIC;
-                                    global_modifiers = (yyvsp[-1].number);
-                                    (yyval.node) = 0;
-                                  }
-#line 2502 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 26: /* member_name: optional_star identifier  */
-#line 302 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                  {
-                                    /* At this point, the current_type here is only a basic_type */
-                                    /* and cannot be unused yet - Sym */
-
-                                    if (current_type == TYPE_VOID)
-                                      yyerror("Illegal to declare class member of type void.");
-                                    add_local_name((yyvsp[0].string), current_type | (yyvsp[-1].number));
-                                    scratch_free((yyvsp[0].string));
-                                  }
-#line 2516 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 30: /* $@3: %empty  */
-#line 320 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                           { current_type = (yyvsp[0].number); }
-#line 2522 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 32: /* @4: %empty  */
-#line 325 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                             { (yyvsp[-2].ihe) = rule_define_class(&(yyval.number), (yyvsp[-1].string)); }
-#line 2528 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 33: /* type_decl: type_modifier_list L_CLASS identifier '{' @4 member_list '}'  */
-#line 326 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                             { rule_define_class_members((yyvsp[-5].ihe), (yyvsp[-2].number)); (yyval.node) = 0; }
-#line 2534 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 35: /* new_local_name: L_DEFINED_NAME  */
-#line 332 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                            {
-                                              if ((yyvsp[0].ihe)->dn.local_num != -1) {
-                                                yyerror("Illegal to redeclare local name '%s'", (yyvsp[0].ihe)->name);
-                                              }
-                                              (yyval.string) = scratch_copy((yyvsp[0].ihe)->name);
-                                            }
-#line 2545 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 37: /* atomic_type: L_CLASS L_DEFINED_NAME  */
-#line 343 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                            {
-                                              if ((yyvsp[0].ihe)->dn.class_num == -1) {
-                                                yyerror("Undefined class '%s'", (yyvsp[0].ihe)->name);
-                                                (yyval.number) = TYPE_ANY;
-                                              } else {
-                                                (yyval.number) = (yyvsp[0].ihe)->dn.class_num | TYPE_MOD_CLASS;
-                                              }
-                                            }
-#line 2558 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 38: /* atomic_type: L_CLASS L_IDENTIFIER  */
-#line 352 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                            {
-                                              yyerror("Undefined class '%s'", (yyvsp[0].string));
-                                              (yyval.number) = TYPE_ANY;
-                                            }
-#line 2567 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 19: /* function: type optional_star identifier @1 '(' argument ')' @2 block_or_semi  */
+#line 310 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_func(&(yyval.node), (yyvsp[-5].number), (yyvsp[-7].number), (yyvsp[-6].shared_string), (yyvsp[-3].argument), &(yyvsp[-1].number), &(yyvsp[0].node)); }
+#line 2727 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 40: /* opt_atomic_type: %empty  */
-#line 360 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                        { (yyval.number) = TYPE_ANY; }
-#line 2573 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 20: /* block_or_semi: block  */
+#line 315 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+          { (yyval.node) = rule_block_or_semi((yyvsp[0].decl).node); }
+#line 2733 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 42: /* basic_type: opt_atomic_type L_ARRAY  */
-#line 365 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                            { (yyval.number) = (yyvsp[-1].number) | TYPE_MOD_ARRAY; }
-#line 2579 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 21: /* block_or_semi: ';'  */
+#line 316 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+          { (yyval.node) = 0; }
+#line 2739 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 44: /* arg_type: basic_type ref  */
-#line 370 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                   { (yyval.number) = (yyvsp[-1].number) | LOCAL_MOD_REF; }
-#line 2585 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 22: /* block_or_semi: error  */
+#line 317 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+          { (yyval.node) = 0; }
+#line 2745 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 45: /* optional_default_arg_value: %empty  */
-#line 374 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-         { (yyval.node) = 0; }
-#line 2591 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 23: /* statement: comma_expr ';'  */
+#line 327 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                         { (yyval.node) = rule_statement_expr((yyvsp[-1].node)); }
+#line 2751 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 46: /* optional_default_arg_value: ':' L_FUNCTION_OPEN comma_expr ':' ')'  */
-#line 375 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                          {
-    if (CONFIG_INT(__RC_WOMBLES__)) {
-        if(*(outp-2) != ':') {
-          yyerror("End of functional not found");
-        }
-    }
-    if (current_function_context->num_locals)
-        yyerror("Illegal to use local variable in functional.");
-    if (current_function_context->values_list->r.expr)
-        current_function_context->values_list->r.expr->kind = current_function_context->values_list->kind;
-
-    (yyval.node) = new_node();
-    (yyval.node)->kind = NODE_FUNCTION_CONSTRUCTOR;
-    (yyval.node)->type = TYPE_FUNCTION;
-    (yyval.node)->l.expr = (yyvsp[-2].node);
-    (yyval.node)->r.expr = nullptr; // no arguments
-    (yyval.node)->v.number = FP_FUNCTIONAL + 0 /* args */;
-    pop_function_context();
-}
-#line 2615 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 47: /* new_arg: arg_type optional_star  */
-#line 397 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                              {
-                                                (yyval.number) = (yyvsp[-1].number) | (yyvsp[0].number);
-                                                if ((yyvsp[-1].number) != TYPE_VOID)
-                                                  add_local_name("", (yyvsp[-1].number) | (yyvsp[0].number));
-                                              }
-#line 2625 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 48: /* new_arg: arg_type optional_star new_local_name optional_default_arg_value  */
-#line 403 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                              {
-                                                if ((yyvsp[-3].number) == TYPE_VOID)
-                                                  yyerror("Illegal to declare argument of type void.");
-                                                add_local_name((yyvsp[-1].string), (yyvsp[-3].number) | (yyvsp[-2].number), (yyvsp[0].node));
-                                                scratch_free((yyvsp[-1].string));
-                                                (yyval.number) = (yyvsp[-3].number) | (yyvsp[-2].number);
-                                              }
-#line 2637 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 49: /* new_arg: new_local_name  */
-#line 411 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-                                              {
-                                                if (exact_types) {
-                                                  yyerror("Missing type for argument");
-                                                }
-                                                add_local_name((yyvsp[0].string), TYPE_ANY);
-                                                scratch_free((yyvsp[0].string));
-                                                (yyval.number) = TYPE_ANY;
-                                              }
-#line 2650 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 50: /* argument: %empty  */
-#line 423 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-            {
-      (yyval.argument).num_arg = 0;
-      (yyval.argument).flags = 0;
-    }
-#line 2659 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 52: /* argument: argument_list L_DOT_DOT_DOT  */
-#line 429 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int x = type_of_locals_ptr[max_num_locals-1];
-      int lt = x & ~LOCAL_MODS;
-
-      (yyval.argument) = (yyvsp[-1].argument);
-      (yyval.argument).flags |= ARG_IS_VARARGS;
-
-      if (x & LOCAL_MOD_REF) {
-        yyerror("Variable to hold remainder of args may not be a reference");
-        x &= ~LOCAL_MOD_REF;
-      }
-      if (lt != TYPE_ANY && !(lt & TYPE_MOD_ARRAY))
-        yywarn("Variable to hold remainder of arguments should be an array.");
-    }
-#line 2678 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 53: /* argument_list: new_arg  */
-#line 447 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (((yyvsp[0].number) & TYPE_MASK) == TYPE_VOID && !((yyvsp[0].number) & TYPE_MOD_CLASS)) {
-        if ((yyvsp[0].number) & ~TYPE_MASK)
-          yyerror("Illegal to declare argument of type void.");
-        (yyval.argument).num_arg = 0;
-      } else {
-        (yyval.argument).num_arg = 1;
-      }
-      (yyval.argument).flags = 0;
-    }
-#line 2693 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 54: /* argument_list: argument_list ',' new_arg  */
-#line 458 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (!(yyval.argument).num_arg)    /* first arg was void w/no name */
-        yyerror("argument of type void must be the only argument.");
-      if (((yyvsp[0].number) & TYPE_MASK) == TYPE_VOID && !((yyvsp[0].number) & TYPE_MOD_CLASS))
-        yyerror("Illegal to declare argument of type void.");
-
-      (yyval.argument) = (yyvsp[-2].argument);
-      (yyval.argument).num_arg++;
-    }
-#line 2707 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 27: /* statement: stmt_for  */
+#line 331 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                         { (yyval.node) = rule_statement_compound_stmt((yyvsp[0].decl)); }
+#line 2757 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 55: /* type_modifier_list: %empty  */
-#line 471 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-            {
-      (yyval.number) = 0;
-    }
-#line 2715 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 56: /* type_modifier_list: L_TYPE_MODIFIER type_modifier_list  */
-#line 475 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[-1].number) | (yyvsp[0].number);
-      int acc_mod = (yyval.number) & DECL_ACCESS;
-#ifdef SENSIBLE_MODIFIERS
-      if (acc_mod & (acc_mod - 1)) {
-        char buf[256];
-        char *end = EndOf(buf);
-        get_type_modifiers(buf, end, acc_mod);
-        yyerror("Multiple access modifiers (%s)", buf);
-        (yyval.number) = DECL_PUBLIC;
-      }
-#endif
-    }
-#line 2733 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 28: /* statement: stmt_foreach  */
+#line 332 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                         { (yyval.node) = rule_statement_compound_stmt((yyvsp[0].decl)); }
+#line 2763 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 57: /* type: type_modifier_list opt_basic_type  */
-#line 492 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = ((yyvsp[-1].number) << 16) | (yyvsp[0].number);
-      current_type = (yyval.number);
-    }
-#line 2742 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 31: /* statement: block  */
+#line 335 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                         { (yyval.node) = rule_statement_compound_stmt((yyvsp[0].decl)); }
+#line 2769 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 58: /* cast: '(' basic_type optional_star ')'  */
-#line 500 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[-2].number) | (yyvsp[-1].number);
-    }
-#line 2750 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 32: /* statement: ';'  */
+#line 336 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                         { (yyval.node) = 0; }
+#line 2775 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 60: /* opt_basic_type: %empty  */
-#line 508 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-            {
-      (yyval.number) = TYPE_UNKNOWN;
-    }
-#line 2758 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 33: /* statement: L_BREAK ';'  */
+#line 337 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                         { (yyval.node) = rule_statement_break(); }
+#line 2781 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 63: /* new_name: optional_star identifier  */
-#line 520 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (current_type & (FUNC_VARARGS << 16)){
-        yyerror("Illegal to declare varargs variable.");
-        current_type &= ~(FUNC_VARARGS << 16);
-      }
-      /* Now it is ok to merge the two
-       * remember that class_num and varargs was the reason for above
-       * Do the merging once only per row of decls
-       */
+  case 34: /* statement: L_CONTINUE ';'  */
+#line 338 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                         { (yyval.node) = rule_statement_continue(); }
+#line 2787 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      if (current_type & 0xffff0000){
-        current_type = (current_type >> 16) | (current_type & 0xffff);
-      }
+  case 35: /* stmt_return: L_RETURN ';'  */
+#line 344 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                             { rule_return_void(&(yyval.node)); }
+#line 2793 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      current_type |= global_modifiers;
+  case 36: /* stmt_return: L_RETURN comma_expr ';'  */
+#line 345 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                             { rule_return_expr(&(yyval.node), (yyvsp[-1].node)); }
+#line 2799 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      if (!(current_type & DECL_ACCESS)) current_type |= DECL_PUBLIC;
+  case 37: /* stmt_cond: L_IF '(' comma_expr ')' statement optional_else_part  */
+#line 351 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_cond(&(yyval.node), (yyvsp[-3].node), (yyvsp[-1].node), (yyvsp[0].node)); }
+#line 2805 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      if ((current_type & ~DECL_MODS) == TYPE_VOID)
-        yyerror("Illegal to declare global variable of type void.");
+  case 38: /* optional_else_part: %empty  */
+#line 355 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                { (yyval.node) = 0; }
+#line 2811 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      define_new_variable((yyvsp[0].string), current_type | (yyvsp[-1].number));
-      scratch_free((yyvsp[0].string));
-    }
-#line 2787 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 64: /* new_name: optional_star identifier L_ASSIGN expr0  */
-#line 545 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      parse_node_t *expr, *newnode;
-      int type;
-
-      if (current_type & (FUNC_VARARGS << 16)){
-        yyerror("Illegal to declare varargs variable.");
-        current_type &= ~(FUNC_VARARGS << 16);
-      }
-
-      if (current_type & 0xffff0000){
-        current_type = (current_type >> 16) | (current_type & 0xffff);
-      }
-
-      current_type |= global_modifiers;
-
-      if (!(current_type & DECL_ACCESS)) current_type |= DECL_PUBLIC;
-
-      if ((current_type & ~DECL_MODS) == TYPE_VOID)
-        yyerror("Illegal to declare global variable of type void.");
-
-      if ((yyvsp[-1].number) != F_ASSIGN)
-        yyerror("Only '=' is legal in initializers.");
-
-      /* ignore current_type == 0, which gets a missing type error
-         later anyway */
-      if (current_type) {
-        type = (current_type | (yyvsp[-3].number)) & ~DECL_MODS;
-        if ((current_type & ~DECL_MODS) == TYPE_VOID)
-          yyerror("Illegal to declare global variable of type void.");
-        if (!compatible_types(type, (yyvsp[0].node)->type)) {
-          char buff[256];
-          char *end = EndOf(buff);
-          char *p;
-
-          p = strput(buff, end, "Type mismatch ");
-          p = get_two_types(p, end, type, (yyvsp[0].node)->type);
-          p = strput(p, end, " when initializing ");
-          p = strput(p, end, (yyvsp[-2].string));
-          yyerror(buff);
-        }
-      } else type = 0;
-      (yyvsp[0].node) = do_promotions((yyvsp[0].node), type);
-
-      CREATE_BINARY_OP(expr, F_VOID_ASSIGN, 0, (yyvsp[0].node), 0);
-      CREATE_OPCODE_1(expr->r.expr, F_GLOBAL_LVALUE, 0,
-          define_new_variable((yyvsp[-2].string), current_type | (yyvsp[-3].number)));
-      newnode = comp_trees[TREE_INIT];
-      CREATE_TWO_VALUES(comp_trees[TREE_INIT], 0,
-          newnode, expr);
-      scratch_free((yyvsp[-2].string));
-    }
-#line 2843 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 39: /* optional_else_part: L_ELSE statement  */
+#line 356 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                 { (yyval.node) = (yyvsp[0].node); }
+#line 2817 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 65: /* @5: %empty  */
-#line 600 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    { (yyval.number) = current_number_of_locals; }
-#line 2849 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 40: /* stmt_while: L_WHILE '(' comma_expr ')' loop_start statement  */
+#line 362 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_while(&(yyval.node), (yyvsp[-3].node), (yyvsp[0].node), (yyvsp[-1].number)); }
+#line 2823 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 66: /* block: '{' @5 block_statements '}'  */
-#line 602 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.decl).node = (yyvsp[-1].decl).node;
-      (yyval.decl).num = current_number_of_locals - (yyvsp[-2].number);  /* calculate locals declared in this block */
-    }
-#line 2858 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 41: /* stmt_do: L_DO loop_start statement L_WHILE '(' comma_expr ')' ';'  */
+#line 368 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_do(&(yyval.node), (yyvsp[-5].node), (yyvsp[-2].node), (yyvsp[-6].number)); }
+#line 2829 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 70: /* local_declarations: %empty  */
-#line 612 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-            {
-      (yyval.decl).node = 0;
-      (yyval.decl).num = 0;
-    }
-#line 2867 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 71: /* $@6: %empty  */
-#line 617 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[0].number) == TYPE_VOID)
-        yyerror("Illegal to declare local variable of type void.");
-      /* can't do this in basic_type b/c local_name_list contains
-       * expr0 which contains cast which contains basic_type
-       */
-      current_type = (yyvsp[0].number);
-    }
-#line 2880 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 72: /* local_declarations: local_declarations basic_type $@6 local_name_list ';'  */
-#line 626 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[-4].decl).node && (yyvsp[-1].decl).node) {
-        CREATE_STATEMENTS((yyval.decl).node, (yyvsp[-4].decl).node, (yyvsp[-1].decl).node);
-      } else (yyval.decl).node = ((yyvsp[-4].decl).node ? (yyvsp[-4].decl).node : (yyvsp[-1].decl).node);
-      (yyval.decl).num = (yyvsp[-4].decl).num + (yyvsp[-1].decl).num;
-    }
-#line 2891 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 73: /* new_local_def: optional_star new_local_name  */
-#line 636 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (current_type & LOCAL_MOD_REF) {
-        yyerror("Illegal to declare local variable as reference");
-        current_type &= ~LOCAL_MOD_REF;
-      }
-      add_local_name((yyvsp[0].string), current_type | (yyvsp[-1].number) | LOCAL_MOD_UNUSED);
-
-      scratch_free((yyvsp[0].string));
-      (yyval.node) = 0;
-    }
-#line 2906 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 74: /* new_local_def: optional_star new_local_name L_ASSIGN expr0  */
-#line 647 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int type = (current_type | (yyvsp[-3].number)) & ~DECL_MODS;
-
-      if (current_type & LOCAL_MOD_REF) {
-        yyerror("Illegal to declare local variable as reference");
-        current_type &= ~LOCAL_MOD_REF;
-        type &= ~LOCAL_MOD_REF;
-      }
-
-      if ((yyvsp[-1].number) != F_ASSIGN)
-        yyerror("Only '=' is allowed in initializers.");
-      if (!compatible_types((yyvsp[0].node)->type, type)) {
-        char buff[256];
-        char *end = EndOf(buff);
-        char *p;
-
-        p = strput(buff, end, "Type mismatch ");
-        p = get_two_types(p, end, type, (yyvsp[0].node)->type);
-        p = strput(p, end, " when initializing ");
-        p = strput(p, end, (yyvsp[-2].string));
-
-        yyerror(buff);
-      }
-
-      (yyvsp[0].node) = do_promotions((yyvsp[0].node), type);
-
-      CREATE_UNARY_OP_1((yyval.node), F_VOID_ASSIGN_LOCAL, 0, (yyvsp[0].node),
-          add_local_name((yyvsp[-2].string), current_type | (yyvsp[-3].number) | LOCAL_MOD_UNUSED));
-      scratch_free((yyvsp[-2].string));
-    }
-#line 2941 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 42: /* stmt_for: L_FOR '(' for_init ';' for_expr ';' for_expr ')' loop_start statement  */
+#line 374 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_for(&(yyval.decl), &(yyvsp[-7].decl), (yyvsp[-5].node), (yyvsp[-3].node), (yyvsp[0].node), (yyvsp[-1].number)); }
+#line 2835 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 75: /* single_new_local_def: arg_type optional_star new_local_name  */
-#line 681 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[-2].number) == TYPE_VOID)
-        yyerror("Illegal to declare local variable of type void.");
+  case 43: /* stmt_foreach: L_FOREACH '(' foreach_vars L_IN expr ')' foreach_start statement  */
+#line 380 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_foreach(&(yyval.decl), &(yyvsp[-5].decl), (yyvsp[-3].node), (yyvsp[0].node), (yyvsp[-1].number)); }
+#line 2841 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      (yyval.number) = add_local_name((yyvsp[0].string), (yyvsp[-2].number) | (yyvsp[-1].number));
-      scratch_free((yyvsp[0].string));
-    }
-#line 2953 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 76: /* single_new_local_def_with_init: single_new_local_def L_ASSIGN expr0  */
-#line 692 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int type = type_of_locals_ptr[(yyvsp[-2].number)];
-
-      if (type & LOCAL_MOD_REF) {
-        yyerror("Illegal to declare local variable as reference");
-        type_of_locals_ptr[(yyvsp[-2].number)] &= ~LOCAL_MOD_REF;
-      }
-      type &= ~LOCAL_MODS;
-
-      if ((yyvsp[-1].number) != F_ASSIGN)
-        yyerror("Only '=' is allowed in initializers.");
-      if (!compatible_types((yyvsp[0].node)->type, type)) {
-        char buff[256];
-        char *end = EndOf(buff);
-        char *p;
-
-        p = strput(buff, end, "Type mismatch ");
-        p = get_two_types(p, end, type, (yyvsp[0].node)->type);
-        p = strput(p, end, " when initializing.");
-        yyerror(buff);
-      }
-
-      (yyvsp[0].node) = do_promotions((yyvsp[0].node), type);
-
-      /* this is an expression */
-      CREATE_BINARY_OP((yyval.node), F_ASSIGN, 0, (yyvsp[0].node), 0);
-      CREATE_OPCODE_1((yyval.node)->r.expr, F_LOCAL_LVALUE, 0, (yyvsp[-2].number));
-    }
-#line 2986 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 44: /* stmt_switch: switch_header '{' local_declarations case switch_block '}'  */
+#line 386 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_switch(&(yyval.node), (yyvsp[-5].switch_header).expr, &(yyvsp[-3].decl), (yyvsp[-2].node), (yyvsp[-1].node), (yyvsp[-5].switch_header).saved_context, (yyvsp[-5].switch_header).saved_cases_size); }
+#line 2847 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 77: /* local_name_list: new_local_def  */
-#line 724 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.decl).node = (yyvsp[0].node);
-      (yyval.decl).num = 1;
-    }
-#line 2995 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 78: /* local_name_list: new_local_def ',' local_name_list  */
-#line 729 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[-2].node) && (yyvsp[0].decl).node) {
-        CREATE_STATEMENTS((yyval.decl).node, (yyvsp[-2].node), (yyvsp[0].decl).node);
-      } else (yyval.decl).node = ((yyvsp[-2].node) ? (yyvsp[-2].node) : (yyvsp[0].decl).node);
-      (yyval.decl).num = 1 + (yyvsp[0].decl).num;
-    }
-#line 3006 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 79: /* $@7: %empty  */
-#line 739 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[0].number) == TYPE_VOID)
-        yyerror("Illegal to declare local variable of type void.");
-      current_type = (yyvsp[0].number);
-    }
-#line 3016 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 45: /* block: '{' block_start statements '}'  */
+#line 398 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_block(&(yyval.decl), (yyvsp[-1].decl).node, (yyvsp[-2].number)); }
+#line 2853 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 80: /* local_declaration_statement: basic_type $@7 local_name_list ';'  */
-#line 745 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.decl).node = (yyvsp[-1].decl).node;
-      (yyval.decl).num = (yyvsp[-1].decl).num;
-    }
-#line 3025 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 46: /* statements: %empty  */
+#line 404 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_block_statements_empty(&(yyval.decl)); }
+#line 2859 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 81: /* block_statements: %empty  */
-#line 753 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-            {
-      (yyval.decl).node = 0;
-      (yyval.decl).num = 0;
-    }
-#line 3034 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 82: /* block_statements: statement block_statements  */
-#line 758 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[-1].node) && (yyvsp[0].decl).node) {
-        CREATE_STATEMENTS((yyval.decl).node, (yyvsp[-1].node), (yyvsp[0].decl).node);
-      } else (yyval.decl).node = ((yyvsp[-1].node) ? (yyvsp[-1].node) : (yyvsp[0].decl).node);
-      (yyval.decl).num = (yyvsp[0].decl).num;
-    }
-#line 3045 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 83: /* block_statements: local_declaration_statement block_statements  */
-#line 765 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[-1].decl).node && (yyvsp[0].decl).node) {
-        CREATE_STATEMENTS((yyval.decl).node, (yyvsp[-1].decl).node, (yyvsp[0].decl).node);
-      } else (yyval.decl).node = ((yyvsp[-1].decl).node ? (yyvsp[-1].decl).node : (yyvsp[0].decl).node);
-      (yyval.decl).num = (yyvsp[-1].decl).num + (yyvsp[0].decl).num;
-    }
-#line 3056 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 47: /* statements: statement statements  */
+#line 406 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_block_statements_stmt(&(yyval.decl), (yyvsp[-1].node), &(yyvsp[0].decl)); }
+#line 2865 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 84: /* block_statements: error ';' block_statements  */
-#line 772 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.decl).node = (yyvsp[0].decl).node;
-      (yyval.decl).num = (yyvsp[0].decl).num;
-    }
-#line 3065 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 85: /* statement: comma_expr ';'  */
-#line 780 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = pop_value((yyvsp[-1].node));
-#ifdef DEBUG
-      {
-        parse_node_t *replacement;
-        CREATE_STATEMENTS(replacement, (yyval.node), 0);
-        CREATE_OPCODE(replacement->r.expr, F_BREAK_POINT, 0);
-        (yyval.node) = replacement;
-      }
-#endif
-    }
-#line 3081 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 48: /* statements: local_declaration_statement statements  */
+#line 408 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_block_statements_decl(&(yyval.decl), &(yyvsp[-1].decl), &(yyvsp[0].decl)); }
+#line 2871 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 91: /* statement: decl_block  */
-#line 797 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = (yyvsp[0].decl).node;
-      pop_n_locals((yyvsp[0].decl).num);
-    }
-#line 3090 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 49: /* statements: error ';' statements  */
+#line 410 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_block_statements_error(&(yyval.decl), &(yyvsp[0].decl)); }
+#line 2877 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 92: /* statement: ';'  */
-#line 802 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = 0;
-    }
-#line 3098 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 93: /* statement: L_BREAK ';'  */
-#line 806 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (context & SPECIAL_CONTEXT) {
-        yyerror("Cannot break out of catch { } or time_expression { }");
-        (yyval.node) = 0;
-      } else
-        if (context & SWITCH_CONTEXT) {
-          CREATE_CONTROL_JUMP((yyval.node), CJ_BREAK_SWITCH);
-        } else
-          if (context & LOOP_CONTEXT) {
-            CREATE_CONTROL_JUMP((yyval.node), CJ_BREAK);
-            if (context & LOOP_FOREACH) {
-              parse_node_t *replace;
-              CREATE_STATEMENTS(replace, 0, (yyval.node));
-              CREATE_OPCODE(replace->l.expr, F_EXIT_FOREACH, 0);
-              (yyval.node) = replace;
-            }
-          } else {
-            yyerror("break statement outside loop");
-            (yyval.node) = 0;
-          }
-    }
-#line 3124 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 94: /* statement: L_CONTINUE ';'  */
-#line 828 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (context & SPECIAL_CONTEXT)
-        yyerror("Cannot continue out of catch { } or time_expression { }");
-      else
-        if (!(context & LOOP_CONTEXT))
-          yyerror("continue statement outside loop");
-      CREATE_CONTROL_JUMP((yyval.node), CJ_CONTINUE);
-    }
-#line 3137 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 50: /* local_decl_statement_header: basic_type  */
+#line 415 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+              { rule_local_declaration_statement_set_type((yyvsp[0].number)); (yyval.number) = (yyvsp[0].number); }
+#line 2883 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 95: /* $@8: %empty  */
-#line 840 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyvsp[-3].number) = context;
-      context = LOOP_CONTEXT;
-    }
-#line 3146 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 51: /* local_declaration_statement: local_decl_statement_header local_name_list ';'  */
+#line 420 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_local_declaration_statement(&(yyval.decl), &(yyvsp[-1].decl)); }
+#line 2889 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 96: /* while: L_WHILE '(' comma_expr ')' $@8 statement  */
-#line 845 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_LOOP((yyval.node), 1, (yyvsp[0].node), 0, optimize_loop_test((yyvsp[-3].node)));
-      context = (yyvsp[-5].number);
-    }
-#line 3155 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 52: /* local_decl_header: basic_type  */
+#line 425 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+              { rule_local_declarations_set_type((yyvsp[0].number)); (yyval.number) = (yyvsp[0].number); }
+#line 2895 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 97: /* $@9: %empty  */
-#line 853 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyvsp[0].number) = context;
-      context = LOOP_CONTEXT;
-    }
-#line 3164 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 53: /* local_declarations: %empty  */
+#line 430 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { (yyval.decl).node = 0; (yyval.decl).num = 0; }
+#line 2901 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 98: /* do: L_DO $@9 statement L_WHILE '(' comma_expr ')' ';'  */
-#line 858 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_LOOP((yyval.node), 0, (yyvsp[-5].node), 0, optimize_loop_test((yyvsp[-2].node)));
-      context = (yyvsp[-7].number);
-    }
-#line 3173 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 99: /* $@10: %empty  */
-#line 866 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyvsp[-5].decl).node = pop_value((yyvsp[-5].decl).node);
-      (yyvsp[-7].number) = context;
-      context = LOOP_CONTEXT;
-    }
-#line 3183 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 54: /* local_declarations: local_declarations local_decl_header local_name_list ';'  */
+#line 432 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_local_declarations(&(yyval.decl), &(yyvsp[-3].decl), &(yyvsp[-1].decl)); }
+#line 2907 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 100: /* for: L_FOR '(' first_for_expr ';' for_expr ';' for_expr ')' $@10 statement  */
-#line 872 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.decl).num = (yyvsp[-7].decl).num; /* number of declarations (0/1) */
+  case 56: /* comma_expr: comma_expr ',' expr  */
+#line 451 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                { rule_comma_expr(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 2913 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      (yyvsp[-3].node) = pop_value((yyvsp[-3].node));
-      if ((yyvsp[-3].node) && IS_NODE((yyvsp[-3].node), NODE_UNARY_OP, F_INC)
-          && IS_NODE((yyvsp[-3].node)->r.expr, NODE_OPCODE_1, F_LOCAL_LVALUE)) {
-        LPC_INT lvar = (yyvsp[-3].node)->r.expr->l.number;
-        CREATE_OPCODE_1((yyvsp[-3].node), F_LOOP_INCR, 0, lvar);
-      }
+  case 57: /* expr: ref lvalue  */
+#line 455 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                      { rule_expr_ref(&(yyval.node), (yyvsp[0].node)); }
+#line 2919 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      CREATE_STATEMENTS((yyval.decl).node, (yyvsp[-7].decl).node, 0);
-      CREATE_LOOP((yyval.decl).node->r.expr, 1, (yyvsp[0].node), (yyvsp[-3].node), optimize_loop_test((yyvsp[-5].node)));
+  case 58: /* expr: lvalue L_ASSIGN expr  */
+#line 456 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                      { rule_expr_assign(&(yyval.node), (yyvsp[-2].node), (yyvsp[-1].number), (yyvsp[0].node)); }
+#line 2925 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      context = (yyvsp[-9].number);
-    }
-#line 3203 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 101: /* foreach_var: L_DEFINED_NAME  */
-#line 891 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[0].ihe)->dn.local_num != -1) {
-        CREATE_OPCODE_1((yyval.decl).node, F_LOCAL_LVALUE, 0, (yyvsp[0].ihe)->dn.local_num);
-        type_of_locals_ptr[(yyvsp[0].ihe)->dn.local_num] &= ~LOCAL_MOD_UNUSED;
-      } else
-        if ((yyvsp[0].ihe)->dn.global_num != -1) {
-          CREATE_OPCODE_1((yyval.decl).node, F_GLOBAL_LVALUE, 0, (yyvsp[0].ihe)->dn.global_num);
-        } else {
-          char buf[256];
-          char *end = EndOf(buf);
-          char *p;
-
-          p = strput(buf, end, "'");
-          p = strput(p, end, (yyvsp[0].ihe)->name);
-          p = strput(p, end, "' is not a local or a global variable.");
-          yyerror(buf);
-          CREATE_OPCODE_1((yyval.decl).node, F_GLOBAL_LVALUE, 0, 0);
-        }
-      (yyval.decl).num = 0;
-    }
-#line 3228 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 102: /* foreach_var: single_new_local_def  */
-#line 912 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (type_of_locals_ptr[(yyvsp[0].number)] & LOCAL_MOD_REF) {
-        CREATE_OPCODE_1((yyval.decl).node, F_REF_LVALUE, 0, (yyvsp[0].number));
-      } else {
-        CREATE_OPCODE_1((yyval.decl).node, F_LOCAL_LVALUE, 0, (yyvsp[0].number));
-        type_of_locals_ptr[(yyvsp[0].number)] &= ~LOCAL_MOD_UNUSED;
-      }
-      (yyval.decl).num = 1;
-    }
-#line 3242 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 103: /* foreach_var: L_IDENTIFIER  */
-#line 922 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      char buf[256];
-      char *end = EndOf(buf);
-      char *p;
-
-      p = strput(buf, end, "'");
-      p = strput(p, end, (yyvsp[0].string));
-      p = strput(p, end, "' is not a local or a global variable.");
-      yyerror(buf);
-      CREATE_OPCODE_1((yyval.decl).node, F_GLOBAL_LVALUE, 0, 0);
-      scratch_free((yyvsp[0].string));
-      (yyval.decl).num = 0;
-    }
-#line 3260 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 59: /* expr: error L_ASSIGN expr  */
+#line 457 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                      { rule_expr_assign_error(&(yyval.node), (yyvsp[0].node)); }
+#line 2931 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 104: /* foreach_vars: foreach_var  */
-#line 939 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_FOREACH((yyval.decl).node, (yyvsp[0].decl).node, 0);
-      (yyval.decl).num = (yyvsp[0].decl).num;
-    }
-#line 3269 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 105: /* foreach_vars: foreach_var ',' foreach_var  */
-#line 944 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_FOREACH((yyval.decl).node, (yyvsp[-2].decl).node, (yyvsp[0].decl).node);
-      (yyval.decl).num = (yyvsp[-2].decl).num + (yyvsp[0].decl).num;
-      if ((yyvsp[-2].decl).node->v.number == F_REF_LVALUE)
-        yyerror("Mapping key may not be a reference in foreach()");
-    }
-#line 3280 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 106: /* $@11: %empty  */
-#line 954 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyvsp[-3].decl).node->v.expr = (yyvsp[-1].node);
-      (yyvsp[-5].number) = context;
-      context = LOOP_CONTEXT | LOOP_FOREACH;
-    }
-#line 3290 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 60: /* expr: expr '?' expr ':' expr  */
+#line 459 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                                            { rule_expr_ternary(&(yyval.node), (yyvsp[-4].node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 2937 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 107: /* foreach: L_FOREACH '(' foreach_vars L_IN expr0 ')' $@11 statement  */
-#line 960 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.decl).num = (yyvsp[-5].decl).num;
+  case 61: /* expr: expr L_QUESTION_QUESTION expr  */
+#line 460 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                                { rule_expr_nullish(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 2943 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      CREATE_STATEMENTS((yyval.decl).node, (yyvsp[-5].decl).node, 0);
-      CREATE_LOOP((yyval.decl).node->r.expr, 2, (yyvsp[0].node), 0, 0);
-      CREATE_OPCODE((yyval.decl).node->r.expr->r.expr, F_NEXT_FOREACH, 0);
+  case 62: /* expr: expr L_LOR expr  */
+#line 461 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                                { rule_expr_lor(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 2949 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      context = (yyvsp[-7].number);
-    }
-#line 3304 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 63: /* expr: expr L_LAND expr  */
+#line 462 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                                { rule_expr_land(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 2955 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 108: /* for_expr: %empty  */
-#line 973 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-            {
-      (yyval.node) = 0;
-    }
-#line 3312 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 64: /* expr: expr '|' expr  */
+#line 464 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                              { rule_expr_or(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 2961 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 110: /* first_for_expr: for_expr  */
-#line 981 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.decl).node = (yyvsp[0].node);
-      (yyval.decl).num = 0;
-    }
-#line 3321 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 65: /* expr: expr '^' expr  */
+#line 465 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                              { rule_expr_xor(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 2967 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 111: /* first_for_expr: single_new_local_def_with_init  */
-#line 986 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.decl).node = (yyvsp[0].node);
-      (yyval.decl).num = 1;
-    }
-#line 3330 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 112: /* $@12: %empty  */
-#line 994 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyvsp[-3].number) = context;
-      context &= LOOP_CONTEXT;
-      context |= SWITCH_CONTEXT;
-      (yyvsp[-2].number) = mem_block[A_CASES].current_size;
-    }
-#line 3341 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 113: /* switch: L_SWITCH '(' comma_expr ')' $@12 '{' local_declarations case switch_block '}'  */
-#line 1001 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-      {
-        parse_node_t *node1, *node2;
-
-        if ((yyvsp[-1].node)) {
-          CREATE_STATEMENTS(node1, (yyvsp[-2].node), (yyvsp[-1].node));
-        } else node1 = (yyvsp[-2].node);
-
-        if (context & SWITCH_STRINGS) {
-          NODE_NO_LINE(node2, NODE_SWITCH_STRINGS);
-        } else if (context & SWITCH_RANGES) {
-          NODE_NO_LINE(node2, NODE_SWITCH_RANGES);
-        } else if ((context & SWITCH_NUMBERS) ||
-            (context & SWITCH_NOT_EMPTY)) {
-          NODE_NO_LINE(node2, NODE_SWITCH_NUMBERS);
-        } else {
-          // to prevent crashing during the remaining parsing bits
-          NODE_NO_LINE(node2, NODE_SWITCH_NUMBERS);
-
-          yyerror("need case statements in switch/case, not just default:"); //just a default case present
-        }
-
-        node2->l.expr = (yyvsp[-7].node);
-        node2->r.expr = node1;
-        prepare_cases(node2, (yyvsp[-8].number));
-        context = (yyvsp[-9].number);
-        (yyval.node) = node2;
-        pop_n_locals((yyvsp[-3].decl).num);
-      }
-#line 3374 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 114: /* switch_block: case switch_block  */
-#line 1033 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[0].node)){
-        CREATE_STATEMENTS((yyval.node), (yyvsp[-1].node), (yyvsp[0].node));
-      } else (yyval.node) = (yyvsp[-1].node);
-    }
-#line 3384 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 115: /* switch_block: statement switch_block  */
-#line 1039 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[0].node)){
-        CREATE_STATEMENTS((yyval.node), (yyvsp[-1].node), (yyvsp[0].node));
-      } else (yyval.node) = (yyvsp[-1].node);
-    }
-#line 3394 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 66: /* expr: expr '&' expr  */
+#line 466 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                              { rule_expr_and(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 2973 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 116: /* switch_block: %empty  */
-#line 1045 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-            {
-      (yyval.node) = 0;
-    }
-#line 3402 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 67: /* expr: expr L_EQ_NE expr  */
+#line 468 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                     { rule_expr_eq_ne(&(yyval.node), (yyvsp[-1].number), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 2979 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 68: /* expr: expr L_ORDER expr  */
+#line 469 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                  { rule_expr_order(&(yyval.node), (yyvsp[-2].node), (yyvsp[-1].number), (yyvsp[0].node)); }
+#line 2985 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 117: /* case: L_CASE case_label ':'  */
-#line 1052 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = (yyvsp[-1].node);
-      (yyval.node)->v.expr = 0;
+  case 69: /* expr: expr '<' expr  */
+#line 470 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                  { rule_expr_lt(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 2991 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 70: /* expr: expr L_SHIFT expr  */
+#line 472 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                     { rule_expr_shift(&(yyval.node), (yyvsp[-1].number), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 2997 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      add_to_mem_block(A_CASES, (char *)&((yyvsp[-1].node)), sizeof((yyvsp[-1].node)));
+  case 71: /* expr: expr '+' expr  */
+#line 474 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                             {
+        rule_set_operand_ranges((yylsp[-2]).first_line, (yylsp[-2]).first_column, (yylsp[-2]).last_column,
+                                (yylsp[-1]).first_line, (yylsp[-1]).first_column,
+                                (yylsp[0]).first_line, (yylsp[0]).first_column, (yylsp[0]).last_column);
+        rule_expr_add(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node));
+        rule_clear_operand_ranges();
     }
-#line 3413 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+#line 3009 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 118: /* case: L_CASE case_label L_RANGE case_label ':'  */
-#line 1059 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ( (yyvsp[-3].node)->kind != NODE_CASE_NUMBER
-          || (yyvsp[-1].node)->kind != NODE_CASE_NUMBER )
-        yyerror("String case labels not allowed as range bounds");
-      if ((yyvsp[-3].node)->r.number > (yyvsp[-1].node)->r.number) break;
+  case 72: /* expr: expr '-' expr  */
+#line 481 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                             { rule_expr_sub(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 3015 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      context |= SWITCH_RANGES;
+  case 73: /* expr: expr '*' expr  */
+#line 482 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                             { rule_expr_mul(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 3021 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      (yyval.node) = (yyvsp[-3].node);
-      (yyval.node)->v.expr = (yyvsp[-1].node);
+  case 74: /* expr: expr '%' expr  */
+#line 483 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                             { rule_expr_mod(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 3027 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      add_to_mem_block(A_CASES, (char *)&((yyvsp[-3].node)), sizeof((yyvsp[-3].node)));
-    }
-#line 3431 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 75: /* expr: expr '/' expr  */
+#line 484 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                             { rule_expr_div(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 3033 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 119: /* case: L_CASE case_label L_RANGE ':'  */
-#line 1073 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ( (yyvsp[-2].node)->kind != NODE_CASE_NUMBER )
-        yyerror("String case labels not allowed as range bounds");
+  case 76: /* expr: cast expr  */
+#line 486 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                  { rule_expr_cast(&(yyval.node), (yyvsp[-1].number), (yyvsp[0].node)); }
+#line 3039 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      context |= SWITCH_RANGES;
+  case 77: /* expr: L_INC_DEC lvalue  */
+#line 487 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                     { rule_expr_pre_incdec(&(yyval.node), (yyvsp[-1].number), (yyvsp[0].node)); }
+#line 3045 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      (yyval.node) = (yyvsp[-2].node);
-      (yyval.node)->v.expr = new_node();
-      (yyval.node)->v.expr->kind = NODE_CASE_NUMBER;
-      (yyval.node)->v.expr->r.number = LPC_INT_MAX; //maxint
+  case 78: /* expr: '!' expr  */
+#line 488 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                    { rule_expr_not(&(yyval.node), (yyvsp[0].node)); }
+#line 3051 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      add_to_mem_block(A_CASES, (char *)&((yyvsp[-2].node)), sizeof((yyvsp[-2].node)));
-    }
-#line 3449 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 79: /* expr: '~' expr  */
+#line 489 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                    { rule_expr_compl(&(yyval.node), (yyvsp[0].node)); }
+#line 3057 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 120: /* case: L_CASE L_RANGE case_label ':'  */
-#line 1087 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ( (yyvsp[-1].node)->kind != NODE_CASE_NUMBER )
-        yyerror("String case labels not allowed as range bounds");
+  case 80: /* expr: '-' expr  */
+#line 490 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                  { rule_expr_neg(&(yyval.node), (yyvsp[0].node)); }
+#line 3063 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      context |= SWITCH_RANGES;
-      (yyval.node) = new_node();
-      (yyval.node)->kind = NODE_CASE_NUMBER;
-      (yyval.node)->r.number = LPC_INT_MIN; //maxint +1 wraps to min_int, on all computers i know, just not in the C standard iirc
-      (yyval.node)->v.expr = (yyvsp[-1].node);
+  case 81: /* expr: lvalue L_INC_DEC  */
+#line 492 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                          { rule_expr_post_incdec(&(yyval.node), (yyvsp[0].number), (yyvsp[-1].node)); }
+#line 3069 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      add_to_mem_block(A_CASES, (char *)&((yyval.node)), sizeof((yyval.node)));
-    }
-#line 3466 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 121: /* case: L_DEFAULT ':'  */
-#line 1100 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (context & SWITCH_DEFAULT) {
-        yyerror("Duplicate default");
-        (yyval.node) = 0;
-        break;
-      }
-      (yyval.node) = new_node();
-      (yyval.node)->kind = NODE_DEFAULT;
-      (yyval.node)->v.expr = 0;
-      add_to_mem_block(A_CASES, (char *)&((yyval.node)), sizeof((yyval.node)));
-      context |= SWITCH_DEFAULT;
-    }
-#line 3483 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 122: /* case_label: constant  */
-#line 1116 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((context & SWITCH_STRINGS) && (yyvsp[0].number))
-        yyerror("Mixed case label list not allowed");
-
-      if ((yyvsp[0].number))
-        context |= SWITCH_NUMBERS;
-      else
-        context |= SWITCH_NOT_EMPTY;
-
-      (yyval.node) = new_node();
-      (yyval.node)->kind = NODE_CASE_NUMBER;
-      (yyval.node)->r.number = (LPC_INT)(yyvsp[0].number);
-    }
-#line 3501 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 123: /* case_label: string_con1  */
-#line 1130 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      POINTER_INT str;
-      str = store_prog_string((yyvsp[0].string));
-      scratch_free((yyvsp[0].string));
-      if (context & SWITCH_NUMBERS)
-        yyerror("Mixed case label list not allowed");
-      context |= SWITCH_STRINGS;
-      (yyval.node) = new_node();
-      (yyval.node)->kind = NODE_CASE_STRING;
-      (yyval.node)->r.number = (LPC_INT)str;
-    }
-#line 3517 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 88: /* lvalue: primary_expr  */
+#line 504 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                { (yyval.node) = rule_lvalue((yyvsp[0].node)); }
+#line 3075 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 124: /* constant: constant '|' constant  */
-#line 1145 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[-2].number) | (yyvsp[0].number);
-    }
-#line 3525 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 90: /* primary_expr: L_DEFINED_NAME  */
+#line 514 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                     { rule_primary_expr_defined_name(&(yyval.node), (yyvsp[0].ihe)); }
+#line 3081 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 125: /* constant: constant '^' constant  */
-#line 1149 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[-2].number) ^ (yyvsp[0].number);
-    }
-#line 3533 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 91: /* primary_expr: L_IDENTIFIER  */
+#line 515 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                     { rule_primary_expr_identifier(&(yyval.node), (yyvsp[0].string)); }
+#line 3087 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 126: /* constant: constant '&' constant  */
-#line 1153 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[-2].number) & (yyvsp[0].number);
-    }
-#line 3541 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 92: /* primary_expr: L_PARAMETER  */
+#line 516 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                     { rule_primary_expr_parameter(&(yyval.node), (yyvsp[0].number)); }
+#line 3093 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 127: /* constant: constant L_EQ constant  */
-#line 1157 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[-2].number) == (yyvsp[0].number);
-    }
-#line 3549 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 94: /* primary_expr: '(' comma_expr ')'  */
+#line 518 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                     { (yyval.node) = (yyvsp[-1].node); }
+#line 3099 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 128: /* constant: constant L_NE constant  */
-#line 1161 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[-2].number) != (yyvsp[0].number);
-    }
-#line 3557 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 129: /* constant: constant L_ORDER constant  */
-#line 1165 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      switch((yyvsp[-1].number)){
-        case F_GE: (yyval.number) = (yyvsp[-2].number) >= (yyvsp[0].number); break;
-        case F_LE: (yyval.number) = (yyvsp[-2].number) <= (yyvsp[0].number); break;
-        case F_GT: (yyval.number) = (yyvsp[-2].number) >  (yyvsp[0].number); break;
-      }
-    }
-#line 3569 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 97: /* primary_expr: '$' '(' dollar_start comma_expr ')'  */
+#line 524 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_dollar_expr(&(yyval.node), (yyvsp[-2].contextp), (yyvsp[-1].node)); }
+#line 3105 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 130: /* constant: constant '<' constant  */
-#line 1173 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[-2].number) < (yyvsp[0].number);
-    }
-#line 3577 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 98: /* primary_expr: primary_expr L_ARROW identifier  */
+#line 527 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                                 { rule_primary_expr_member_arrow(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].string)); }
+#line 3111 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 131: /* constant: constant L_LSH constant  */
-#line 1177 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[-2].number) << (yyvsp[0].number);
-    }
-#line 3585 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 99: /* primary_expr: primary_expr '.' identifier  */
+#line 528 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                                 { rule_primary_expr_member_dot(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].string)); }
+#line 3117 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 132: /* constant: constant L_RSH constant  */
-#line 1181 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[-2].number) >> (yyvsp[0].number);
-    }
-#line 3593 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 100: /* primary_expr: primary_expr L_OPTIONAL_DOT identifier  */
+#line 534 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_member_optional(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].string)); }
+#line 3123 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 133: /* constant: constant '+' constant  */
-#line 1185 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[-2].number) + (yyvsp[0].number);
-    }
-#line 3601 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 101: /* primary_expr: primary_expr L_OPTIONAL_DOT '[' comma_expr ']'  */
+#line 536 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_index_optional(&(yyval.node), (yyvsp[-4].node), (yyvsp[-1].node)); }
+#line 3129 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 134: /* constant: constant '-' constant  */
-#line 1189 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[-2].number) - (yyvsp[0].number);
-    }
-#line 3609 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 102: /* primary_expr: primary_expr L_DOT_OPTIONAL '[' comma_expr ']'  */
+#line 538 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_index_optional(&(yyval.node), (yyvsp[-4].node), (yyvsp[-1].node)); }
+#line 3135 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 135: /* constant: constant '*' constant  */
-#line 1193 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[-2].number) * (yyvsp[0].number);
-    }
-#line 3617 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 103: /* primary_expr: primary_expr '[' comma_expr ']'  */
+#line 543 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_index(&(yyval.node), (yyvsp[-3].node), (yyvsp[-1].node)); }
+#line 3141 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 136: /* constant: constant '%' constant  */
-#line 1197 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[0].number)) (yyval.number) = (yyvsp[-2].number) % (yyvsp[0].number); else yyerror("Modulo by zero");
-    }
-#line 3625 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 104: /* primary_expr: primary_expr '[' '<' comma_expr ']'  */
+#line 545 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_index_r(&(yyval.node), (yyvsp[-4].node), (yyvsp[-1].node)); }
+#line 3147 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 137: /* constant: constant '/' constant  */
-#line 1201 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[0].number)) (yyval.number) = (yyvsp[-2].number) / (yyvsp[0].number); else yyerror("Division by zero");
-    }
-#line 3633 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 105: /* primary_expr: primary_expr '[' comma_expr L_RANGE comma_expr ']'  */
+#line 547 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_range_nn(&(yyval.node), (yyvsp[-5].node), (yyvsp[-3].node), (yyvsp[-1].node)); }
+#line 3153 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 138: /* constant: '(' constant ')'  */
-#line 1205 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[-1].number);
-    }
-#line 3641 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 106: /* primary_expr: primary_expr '[' '<' comma_expr L_RANGE comma_expr ']'  */
+#line 549 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_range_rn(&(yyval.node), (yyvsp[-6].node), (yyvsp[-3].node), (yyvsp[-1].node)); }
+#line 3159 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 139: /* constant: L_NUMBER  */
-#line 1209 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = (yyvsp[0].number);
-    }
-#line 3649 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 107: /* primary_expr: primary_expr '[' '<' comma_expr L_RANGE '<' comma_expr ']'  */
+#line 551 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_range_rr(&(yyval.node), (yyvsp[-7].node), (yyvsp[-4].node), (yyvsp[-1].node)); }
+#line 3165 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 140: /* constant: '-' L_NUMBER  */
-#line 1213 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = -(yyvsp[0].number);
-    }
-#line 3657 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 108: /* primary_expr: primary_expr '[' comma_expr L_RANGE '<' comma_expr ']'  */
+#line 553 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_range_nr(&(yyval.node), (yyvsp[-6].node), (yyvsp[-4].node), (yyvsp[-1].node)); }
+#line 3171 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 141: /* constant: L_NOT L_NUMBER  */
-#line 1217 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = !(yyvsp[0].number);
-    }
-#line 3665 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 109: /* primary_expr: primary_expr '[' comma_expr L_RANGE ']'  */
+#line 555 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_range_ne(&(yyval.node), (yyvsp[-4].node), (yyvsp[-2].node)); }
+#line 3177 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 142: /* constant: '~' L_NUMBER  */
-#line 1221 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = ~(yyvsp[0].number);
-    }
-#line 3673 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 110: /* primary_expr: primary_expr '[' '<' comma_expr L_RANGE ']'  */
+#line 557 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_range_re(&(yyval.node), (yyvsp[-5].node), (yyvsp[-2].node)); }
+#line 3183 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 143: /* comma_expr: expr0  */
-#line 1228 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = (yyvsp[0].node);
-    }
-#line 3681 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 111: /* primary_expr: primary_expr '[' L_RANGE '<' comma_expr ']'  */
+#line 559 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_range_nr(&(yyval.node), (yyvsp[-5].node), 0, (yyvsp[-1].node)); }
+#line 3189 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 144: /* comma_expr: comma_expr ',' expr0  */
-#line 1232 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_TWO_VALUES((yyval.node), (yyvsp[0].node)->type, pop_value((yyvsp[-2].node)), (yyvsp[0].node));
-    }
-#line 3689 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 146: /* expr0: ref lvalue  */
-#line 1243 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int op;
-
-      if (!(context & ARG_LIST))
-        yyerror("ref illegal outside function argument list");
-      else
-        num_refs++;
-
-      switch ((yyvsp[0].node)->kind) {
-        case NODE_PARAMETER_LVALUE:
-          op = F_LOCAL_LVALUE;
-          break;
-        case NODE_TERNARY_OP:
-        case NODE_OPCODE_1:
-        case NODE_UNARY_OP_1:
-        case NODE_BINARY_OP:
-          op = (yyvsp[0].node)->v.number;
-          if (op > F_RINDEX_LVALUE)
-            yyerror("Illegal to make reference to range");
-          break;
-        default:
-          op=0; //0 is harmless, i hope
-          yyerror("unknown lvalue kind");
-      }
-      CREATE_UNARY_OP_1((yyval.node), F_MAKE_REF, TYPE_ANY, (yyvsp[0].node), op);
-    }
-#line 3720 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 147: /* expr0: lvalue L_ASSIGN expr0  */
-#line 1270 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      parse_node_t *l = (yyvsp[-2].node), *r = (yyvsp[0].node);
-      /* set this up here so we can change it below */
-      /* assignments are backwards; rhs is evaluated before
-         lhs, so put the RIGHT hand side on the LEFT hand
-         side of the tree node. */
-      CREATE_BINARY_OP((yyval.node), (yyvsp[-1].number), r->type, r, l);
-
-      /* allow TYPE_STRING += TYPE_NUMBER | TYPE_OBJECT */
-      if (exact_types && !compatible_types(r->type, l->type) &&
-          !((yyvsp[-1].number) == F_ADD_EQ && l->type == TYPE_STRING &&
-            ((COMP_TYPE(r->type, TYPE_NUMBER)) || r->type == TYPE_OBJECT))) {
-        char buf[256];
-        char *end = EndOf(buf);
-        char *p;
-        p = strput(buf, end, "Bad assignment ");
-        p = get_two_types(p, end, l->type, r->type);
-        p = strput(p, end, ".");
-        yyerror(buf);
-      }
-
-      if ((yyvsp[-1].number) == F_ASSIGN)
-        (yyval.node)->l.expr = do_promotions(r, l->type);
-    }
-#line 3749 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 112: /* primary_expr: primary_expr '[' '<' comma_expr L_RANGE '<' expr ']'  */
+#line 562 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_range_rr(&(yyval.node), (yyvsp[-7].node), (yyvsp[-4].node), (yyvsp[-1].node)); }
+#line 3195 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 148: /* expr0: error L_ASSIGN expr0  */
-#line 1295 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      yyerror("Illegal LHS");
-      CREATE_ERROR((yyval.node));
-    }
-#line 3758 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 149: /* expr0: expr0 '?' expr0 ':' expr0  */
-#line 1300 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      parse_node_t *p1 = (yyvsp[-2].node), *p2 = (yyvsp[0].node);
-
-      if (exact_types && !compatible_types2(p1->type, p2->type)) {
-        char buf[256];
-        char *end = EndOf(buf);
-        char *p;
-
-        p = strput(buf, end, "Types in ?: do not match ");
-        p = get_two_types(p, end, p1->type, p2->type);
-        p = strput(p, end, ".");
-        yywarn(buf);
-      }
-
-      /* optimize if last expression did F_NOT */
-      if (IS_NODE((yyvsp[-4].node), NODE_UNARY_OP, F_NOT)) {
-        /* !a ? b : c  --> a ? c : b */
-        CREATE_IF((yyval.node), (yyvsp[-4].node)->r.expr, p2, p1);
-      } else {
-        CREATE_IF((yyval.node), (yyvsp[-4].node), p1, p2);
-      }
-      (yyval.node)->type = ((p1->type == p2->type) ? p1->type : TYPE_ANY);
-    }
-#line 3786 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 150: /* expr0: expr0 L_LOR expr0  */
-#line 1324 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_LAND_LOR((yyval.node), F_LOR, (yyvsp[-2].node), (yyvsp[0].node));
-      if (IS_NODE((yyvsp[-2].node), NODE_LAND_LOR, F_LOR))
-        (yyvsp[-2].node)->kind = NODE_BRANCH_LINK;
-    }
-#line 3796 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 151: /* expr0: expr0 L_LAND expr0  */
-#line 1330 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_LAND_LOR((yyval.node), F_LAND, (yyvsp[-2].node), (yyvsp[0].node));
-      if (IS_NODE((yyvsp[-2].node), NODE_LAND_LOR, F_LAND))
-        (yyvsp[-2].node)->kind = NODE_BRANCH_LINK;
-    }
-#line 3806 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 152: /* expr0: expr0 '|' expr0  */
-#line 1336 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int t1 = (yyvsp[-2].node)->type, t3 = (yyvsp[0].node)->type;
-
-      if (is_boolean((yyvsp[-2].node)) && is_boolean((yyvsp[0].node)))
-        yywarn("bitwise operation on boolean values.");
-      if ((t1 & TYPE_MOD_ARRAY) || (t3 & TYPE_MOD_ARRAY)) {
-        if (t1 != t3) {
-          if ((t1 != TYPE_ANY) && (t3 != TYPE_ANY) &&
-              !(t1 & t3 & TYPE_MOD_ARRAY)) {
-            char buf[256];
-            char *end = EndOf(buf);
-            char *p;
-
-            p = strput(buf, end, "Incompatible types for | ");
-            p = get_two_types(p, end, t1, t3);
-            p = strput(p, end, ".");
-            yyerror(buf);
-          }
-          t1 = TYPE_ANY | TYPE_MOD_ARRAY;
-        }
-        CREATE_BINARY_OP((yyval.node), F_OR, t1, (yyvsp[-2].node), (yyvsp[0].node));
-      }
-      else (yyval.node) = binary_int_op((yyvsp[-2].node), (yyvsp[0].node), F_OR, "|");
-    }
-#line 3835 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 113: /* primary_expr: primary_expr '[' '<' comma_expr L_RANGE expr ']'  */
+#line 564 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_range_rn(&(yyval.node), (yyvsp[-6].node), (yyvsp[-3].node), (yyvsp[-1].node)); }
+#line 3201 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 153: /* expr0: expr0 '^' expr0  */
-#line 1361 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = binary_int_op((yyvsp[-2].node), (yyvsp[0].node), F_XOR, "^");
-    }
-#line 3843 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 154: /* expr0: expr0 '&' expr0  */
-#line 1365 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int t1 = (yyvsp[-2].node)->type, t3 = (yyvsp[0].node)->type;
-      if (is_boolean((yyvsp[-2].node)) && is_boolean((yyvsp[0].node)))
-        yywarn("bitwise operation on boolean values.");
-      if ((t1 & TYPE_MOD_ARRAY) || (t3 & TYPE_MOD_ARRAY)) {
-        if (t1 != t3) {
-          if ((t1 != TYPE_ANY) && (t3 != TYPE_ANY) &&
-              !(t1 & t3 & TYPE_MOD_ARRAY)) {
-            char buf[256];
-            char *end = EndOf(buf);
-            char *p;
-
-            p = strput(buf, end, "Incompatible types for & ");
-            p = get_two_types(p, end, t1, t3);
-            p = strput(p, end, ".");
-            yyerror(buf);
-          }
-          t1 = TYPE_ANY | TYPE_MOD_ARRAY;
-        }
-        CREATE_BINARY_OP((yyval.node), F_AND, t1, (yyvsp[-2].node), (yyvsp[0].node));
-      } else (yyval.node) = binary_int_op((yyvsp[-2].node), (yyvsp[0].node), F_AND, "&");
-    }
-#line 3870 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 155: /* expr0: expr0 L_EQ expr0  */
-#line 1388 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (exact_types && !compatible_types2((yyvsp[-2].node)->type, (yyvsp[0].node)->type)){
-        char buf[256];
-        char *end = EndOf(buf);
-        char *p;
-
-        p = strput(buf, end, "== always false because of incompatible types ");
-        p = get_two_types(p, end, (yyvsp[-2].node)->type, (yyvsp[0].node)->type);
-        p = strput(p, end, ".");
-        yyerror(buf);
-      }
-      /* x == 0 -> !x */
-      if (IS_NODE((yyvsp[-2].node), NODE_NUMBER, 0)) {
-        CREATE_UNARY_OP((yyval.node), F_NOT, TYPE_NUMBER, (yyvsp[0].node));
-      } else
-        if (IS_NODE((yyvsp[0].node), NODE_NUMBER, 0)) {
-          CREATE_UNARY_OP((yyval.node), F_NOT, TYPE_NUMBER, (yyvsp[-2].node));
-        } else {
-          CREATE_BINARY_OP((yyval.node), F_EQ, TYPE_NUMBER, (yyvsp[-2].node), (yyvsp[0].node));
-        }
-    }
-#line 3896 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 156: /* expr0: expr0 L_NE expr0  */
-#line 1410 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (exact_types && !compatible_types2((yyvsp[-2].node)->type, (yyvsp[0].node)->type)){
-        char buf[256];
-        char *end = EndOf(buf);
-        char *p;
-
-        p = strput(buf, end, "!= always true because of incompatible types ");
-        p = get_two_types(p, end, (yyvsp[-2].node)->type, (yyvsp[0].node)->type);
-        p = strput(p, end, ".");
-        yyerror(buf);
-      }
-      CREATE_BINARY_OP((yyval.node), F_NE, TYPE_NUMBER, (yyvsp[-2].node), (yyvsp[0].node));
-    }
-#line 3914 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 157: /* expr0: expr0 L_ORDER expr0  */
-#line 1424 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (exact_types) {
-        int t1 = (yyvsp[-2].node)->type;
-        int t3 = (yyvsp[0].node)->type;
-
-        if (!COMP_TYPE(t1, TYPE_NUMBER)
-            && !COMP_TYPE(t1, TYPE_STRING)) {
-          char buf[256];
-          char *end = EndOf(buf);
-          char *p;
-
-          p = strput(buf, end, "Bad left argument to '");
-          p = strput(p, end, query_instr_name((yyvsp[-1].number)));
-          p = strput(p, end, "' : \"");
-          p = get_type_name(p, end, t1);
-          p = strput(p, end, "\"");
-          yyerror(buf);
-        } else if (!COMP_TYPE(t3, TYPE_NUMBER)
-            && !COMP_TYPE(t3, TYPE_STRING)) {
-          char buf[256];
-          char *end = EndOf(buf);
-          char *p;
-
-          p = strput(buf, end, "Bad right argument to '");
-          p = strput(p, end, query_instr_name((yyvsp[-1].number)));
-          p = strput(p, end, "' : \"");
-          p = get_type_name(p, end, t3);
-          p = strput(p, end, "\"");
-          yyerror(buf);
-        } else if (!compatible_types2(t1,t3)) {
-          char buf[256];
-          char *end = EndOf(buf);
-          char *p;
-
-          p = strput(buf, end, "Arguments to ");
-          p = strput(p, end, query_instr_name((yyvsp[-1].number)));
-          p = strput(p, end, " do not have compatible types : ");
-          p = get_two_types(p, end, t1, t3);
-          yyerror(buf);
-        }
-      }
-      CREATE_BINARY_OP((yyval.node), (yyvsp[-1].number), TYPE_NUMBER, (yyvsp[-2].node), (yyvsp[0].node));
-    }
-#line 3962 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 158: /* expr0: expr0 '<' expr0  */
-#line 1468 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (exact_types) {
-        int t1 = (yyvsp[-2].node)->type, t3 = (yyvsp[0].node)->type;
-
-        if (!COMP_TYPE(t1, TYPE_NUMBER)
-            && !COMP_TYPE(t1, TYPE_STRING)) {
-          char buf[256];
-          char *end = EndOf(buf);
-          char *p;
-
-          p = strput(buf, end, "Bad left argument to '<' : \"");
-          p = get_type_name(p, end, t1);
-          p = strput(p, end, "\"");
-          yyerror(buf);
-        } else if (!COMP_TYPE(t3, TYPE_NUMBER)
-            && !COMP_TYPE(t3, TYPE_STRING)) {
-          char buf[200];
-          char *end = EndOf(buf);
-          char *p;
-
-          p = strput(buf, end, "Bad right argument to '<' : \"");
-          p = get_type_name(p, end, t3);
-          p = strput(p, end, "\"");
-          yyerror(buf);
-        } else if (!compatible_types2(t1,t3)) {
-          char buf[256];
-          char *end = EndOf(buf);
-          char *p;
-
-          p = strput(buf, end, "Arguments to < do not have compatible types : ");
-          p = get_two_types(p, end, t1, t3);
-          yyerror(buf);
-        }
-      }
-      CREATE_BINARY_OP((yyval.node), F_LT, TYPE_NUMBER, (yyvsp[-2].node), (yyvsp[0].node));
-    }
-#line 4003 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 114: /* primary_expr: lambda_return_type '(' argument ')' block  */
+#line 569 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_anon_func(&(yyval.node), &(yyvsp[-4].func_block), &(yyvsp[-2].argument), &(yyvsp[0].decl)); }
+#line 3207 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 159: /* expr0: expr0 L_LSH expr0  */
-#line 1505 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = binary_int_op((yyvsp[-2].node), (yyvsp[0].node), F_LSH, "<<");
-    }
-#line 4011 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 115: /* primary_expr: functional_open ':' ')'  */
+#line 576 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_functional_1(&(yyval.node), (yyvsp[-2].number)); }
+#line 3213 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 160: /* expr0: expr0 L_RSH expr0  */
-#line 1509 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = binary_int_op((yyvsp[-2].node), (yyvsp[0].node), F_RSH, ">>");
-    }
-#line 4019 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 161: /* expr0: expr0 '+' expr0  */
-#line 1513 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int result_type;
-
-      if (exact_types) {
-        int t1 = (yyvsp[-2].node)->type, t3 = (yyvsp[0].node)->type;
-
-        if (t1 == t3){
-#ifdef CAST_CALL_OTHERS
-          if (t1 == TYPE_UNKNOWN){
-            yyerror("Bad arguments to '+' (unknown vs unknown)");
-            result_type = TYPE_ANY;
-          } else
-#endif
-            result_type = t1;
-        }
-        else if (t1 == TYPE_ANY) {
-          if (t3 == TYPE_FUNCTION) {
-            yyerror("Bad right argument to '+' (function)");
-            result_type = TYPE_ANY;
-          } else result_type = t3;
-        } else if (t3 == TYPE_ANY) {
-          if (t1 == TYPE_FUNCTION) {
-            yyerror("Bad left argument to '+' (function)");
-            result_type = TYPE_ANY;
-          } else result_type = t1;
-        } else {
-          switch(t1) {
-            case TYPE_OBJECT:
-              if(t3 == TYPE_STRING){
-                result_type = TYPE_STRING;
-              } else goto add_error;
-              break;
-            case TYPE_STRING:
-              {
-                if (t3 == TYPE_REAL || t3 == TYPE_NUMBER || t3 == TYPE_OBJECT){
-                  result_type = TYPE_STRING;
-                } else goto add_error;
-                break;
-              }
-            case TYPE_NUMBER:
-              {
-                if (t3 == TYPE_REAL || t3 == TYPE_STRING)
-                  result_type = t3;
-                else goto add_error;
-                break;
-              }
-            case TYPE_REAL:
-              {
-                if (t3 == TYPE_NUMBER) result_type = TYPE_REAL;
-                else if (t3 == TYPE_STRING) result_type = TYPE_STRING;
-                else goto add_error;
-                break;
-              }
-            default:
-              {
-                if (t1 & t3 & TYPE_MOD_ARRAY) {
-                  result_type = TYPE_ANY|TYPE_MOD_ARRAY;
-                  break;
-                }
-            add_error:
-                {
-                  char buf[256];
-                  char *end = EndOf(buf);
-                  char *p;
-
-                  p = strput(buf, end, "Invalid argument types to '+' ");
-                  p = get_two_types(p, end, t1, t3);
-                  yyerror(buf);
-                  result_type = TYPE_ANY;
-                }
-              }
-          }
-        }
-      } else
-        result_type = TYPE_ANY;
-
-      /* TODO: perhaps we should do (string)+(number) and
-       * (number)+(string) constant folding as well.
-       *
-       * codefor string x = "foo" + 1;
-       *
-       * 0000: push string 13, number 1
-       * 0004: +
-       * 0005: (void)assign_local LV0
-       */
-      switch ((yyvsp[-2].node)->kind) {
-        case NODE_NUMBER:
-          /* 0 + X */
-          if ((yyvsp[-2].node)->v.number == 0 &&
-              ((yyvsp[0].node)->type == TYPE_NUMBER || (yyvsp[0].node)->type == TYPE_REAL)) {
-            (yyval.node) = (yyvsp[0].node);
-            break;
-          }
-          if ((yyvsp[0].node)->kind == NODE_NUMBER) {
-            (yyval.node) = (yyvsp[-2].node);
-            (yyvsp[-2].node)->v.number += (yyvsp[0].node)->v.number;
-            break;
-          }
-          if ((yyvsp[0].node)->kind == NODE_REAL) {
-            (yyval.node) = (yyvsp[0].node);
-            (yyvsp[0].node)->v.real += (yyvsp[-2].node)->v.number;
-            break;
-          }
-          /* swapping the nodes may help later constant folding */
-          if ((yyvsp[0].node)->type != TYPE_STRING && (yyvsp[0].node)->type != TYPE_ANY)
-            CREATE_BINARY_OP((yyval.node), F_ADD, result_type, (yyvsp[0].node), (yyvsp[-2].node));
-          else
-            CREATE_BINARY_OP((yyval.node), F_ADD, result_type, (yyvsp[-2].node), (yyvsp[0].node));
-          break;
-        case NODE_REAL:
-          if ((yyvsp[0].node)->kind == NODE_NUMBER) {
-            (yyval.node) = (yyvsp[-2].node);
-            (yyvsp[-2].node)->v.real += (yyvsp[0].node)->v.number;
-            break;
-          }
-          if ((yyvsp[0].node)->kind == NODE_REAL) {
-            (yyval.node) = (yyvsp[-2].node);
-            (yyvsp[-2].node)->v.real += (yyvsp[0].node)->v.real;
-            break;
-          }
-          /* swapping the nodes may help later constant folding */
-          if ((yyvsp[0].node)->type != TYPE_STRING && (yyvsp[0].node)->type != TYPE_ANY)
-            CREATE_BINARY_OP((yyval.node), F_ADD, result_type, (yyvsp[0].node), (yyvsp[-2].node));
-          else
-            CREATE_BINARY_OP((yyval.node), F_ADD, result_type, (yyvsp[-2].node), (yyvsp[0].node));
-          break;
-        case NODE_STRING:
-          if ((yyvsp[0].node)->kind == NODE_STRING) {
-            /* Combine strings */
-            LPC_INT n1, n2;
-            const char *s1, *s2;
-            char *news;
-            int l;
-
-            n1 = (yyvsp[-2].node)->v.number;
-            n2 = (yyvsp[0].node)->v.number;
-            s1 = PROG_STRING(n1);
-            s2 = PROG_STRING(n2);
-            news = (char *)DMALLOC( (l = strlen(s1))+strlen(s2)+1, TAG_COMPILER, "combine string" );
-            strcpy(news, s1);
-            strcat(news + l, s2);
-            /* free old strings (ordering may help shrink table) */
-            if (n1 > n2) {
-              free_prog_string(n1); free_prog_string(n2);
-            } else {
-              free_prog_string(n2); free_prog_string(n1);
-            }
-            (yyval.node) = (yyvsp[-2].node);
-            (yyval.node)->v.number = store_prog_string(news);
-            FREE(news);
-            break;
-          }
-          /* Yes, this can actually happen for absurd code like:
-           * (int)"foo" + 0
-           * for which I guess we ought to generate (int)"foo"
-           * in order to be consistent.  Then shoot the coder.
-           */
-          /* FALLTHROUGH */
-        default:
-          /* X + 0 */
-          if (IS_NODE((yyvsp[0].node), NODE_NUMBER, 0) &&
-              ((yyvsp[-2].node)->type == TYPE_NUMBER || (yyvsp[-2].node)->type == TYPE_REAL)) {
-            (yyval.node) = (yyvsp[-2].node);
-            break;
-          }
-          CREATE_BINARY_OP((yyval.node), F_ADD, result_type, (yyvsp[-2].node), (yyvsp[0].node));
-          break;
-      }
-    }
-#line 4193 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 162: /* expr0: expr0 '-' expr0  */
-#line 1683 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int result_type;
-
-      if (exact_types) {
-        int t1 = (yyvsp[-2].node)->type, t3 = (yyvsp[0].node)->type;
-
-        if (t1 == t3){
-          switch(t1){
-            case TYPE_ANY:
-            case TYPE_NUMBER:
-            case TYPE_REAL:
-              result_type = t1;
-              break;
-            default:
-              if (!(t1 & TYPE_MOD_ARRAY)){
-                type_error("Bad argument number 1 to '-'", t1);
-                result_type = TYPE_ANY;
-              } else result_type = t1;
-          }
-        } else if (t1 == TYPE_ANY){
-          switch(t3){
-            case TYPE_REAL:
-            case TYPE_NUMBER:
-              result_type = t3;
-              break;
-            default:
-              if (!(t3 & TYPE_MOD_ARRAY)){
-                type_error("Bad argument number 2 to '-'", t3);
-                result_type = TYPE_ANY;
-              } else result_type = t3;
-          }
-        } else if (t3 == TYPE_ANY){
-          switch(t1){
-            case TYPE_REAL:
-            case TYPE_NUMBER:
-              result_type = t1;
-              break;
-            default:
-              if (!(t1 & TYPE_MOD_ARRAY)){
-                type_error("Bad argument number 1 to '-'", t1);
-                result_type = TYPE_ANY;
-              } else result_type = t1;
-          }
-        } else if ((t1 == TYPE_REAL && t3 == TYPE_NUMBER) ||
-            (t3 == TYPE_REAL && t1 == TYPE_NUMBER)){
-          result_type = TYPE_REAL;
-        } else if (t1 & t3 & TYPE_MOD_ARRAY){
-          result_type = TYPE_MOD_ARRAY|TYPE_ANY;
-        } else {
-          char buf[256];
-          char *end = EndOf(buf);
-          char *p;
-
-          p = strput(buf, end, "Invalid types to '-' ");
-          p = get_two_types(p, end, t1, t3);
-          yyerror(buf);
-          result_type = TYPE_ANY;
-        }
-      } else result_type = TYPE_ANY;
-
-      switch ((yyvsp[-2].node)->kind) {
-        case NODE_NUMBER:
-          if ((yyvsp[-2].node)->v.number == 0) {
-            CREATE_UNARY_OP((yyval.node), F_NEGATE, (yyvsp[0].node)->type, (yyvsp[0].node));
-          } else if ((yyvsp[0].node)->kind == NODE_NUMBER) {
-            (yyval.node) = (yyvsp[-2].node);
-            (yyvsp[-2].node)->v.number -= (yyvsp[0].node)->v.number;
-          } else if ((yyvsp[0].node)->kind == NODE_REAL) {
-            (yyval.node) = (yyvsp[0].node);
-            (yyvsp[0].node)->v.real = (yyvsp[-2].node)->v.number - (yyvsp[0].node)->v.real;
-          } else {
-            CREATE_BINARY_OP((yyval.node), F_SUBTRACT, result_type, (yyvsp[-2].node), (yyvsp[0].node));
-          }
-          break;
-        case NODE_REAL:
-          if ((yyvsp[0].node)->kind == NODE_NUMBER) {
-            (yyval.node) = (yyvsp[-2].node);
-            (yyvsp[-2].node)->v.real -= (yyvsp[0].node)->v.number;
-          } else if ((yyvsp[0].node)->kind == NODE_REAL) {
-            (yyval.node) = (yyvsp[-2].node);
-            (yyvsp[-2].node)->v.real -= (yyvsp[0].node)->v.real;
-          } else {
-            CREATE_BINARY_OP((yyval.node), F_SUBTRACT, result_type, (yyvsp[-2].node), (yyvsp[0].node));
-          }
-          break;
-        default:
-          /* optimize X-0 */
-          if (IS_NODE((yyvsp[0].node), NODE_NUMBER, 0)) {
-            (yyval.node) = (yyvsp[-2].node);
-          }
-          CREATE_BINARY_OP((yyval.node), F_SUBTRACT, result_type, (yyvsp[-2].node), (yyvsp[0].node));
-      }
-    }
-#line 4291 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 163: /* expr0: expr0 '*' expr0  */
-#line 1777 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int result_type;
-
-      if (exact_types){
-        int t1 = (yyvsp[-2].node)->type, t3 = (yyvsp[0].node)->type;
-
-        if (t1 == t3){
-          switch(t1){
-            case TYPE_MAPPING:
-            case TYPE_ANY:
-            case TYPE_NUMBER:
-            case TYPE_REAL:
-              result_type = t1;
-              break;
-            default:
-              type_error("Bad argument number 1 to '*'", t1);
-              result_type = TYPE_ANY;
-          }
-        } else if (t1 == TYPE_ANY || t3 == TYPE_ANY){
-          int t = (t1 == TYPE_ANY) ? t3 : t1;
-          switch(t){
-            case TYPE_NUMBER:
-            case TYPE_REAL:
-            case TYPE_MAPPING:
-              result_type = t;
-              break;
-            default:
-              type_error((t1 == TYPE_ANY) ?
-                  "Bad argument number 2 to '*'" :
-                  "Bad argument number 1 to '*'",
-                  t);
-              result_type = TYPE_ANY;
-          }
-        } else if ((t1 == TYPE_NUMBER && t3 == TYPE_REAL) ||
-            (t1 == TYPE_REAL && t3 == TYPE_NUMBER)){
-          result_type = TYPE_REAL;
-        } else {
-          char buf[256];
-          char *end = EndOf(buf);
-          char *p;
-
-          p = strput(buf, end, "Invalid types to '*' ");
-          p = get_two_types(p, end, t1, t3);
-          yyerror(buf);
-          result_type = TYPE_ANY;
-        }
-      } else result_type = TYPE_ANY;
-
-      switch ((yyvsp[-2].node)->kind) {
-        case NODE_NUMBER:
-          if ((yyvsp[0].node)->kind == NODE_NUMBER) {
-            (yyval.node) = (yyvsp[-2].node);
-            (yyval.node)->v.number *= (yyvsp[0].node)->v.number;
-            break;
-          }
-          if ((yyvsp[0].node)->kind == NODE_REAL) {
-            (yyval.node) = (yyvsp[0].node);
-            (yyvsp[0].node)->v.real *= (yyvsp[-2].node)->v.number;
-            break;
-          }
-          CREATE_BINARY_OP((yyval.node), F_MULTIPLY, result_type, (yyvsp[0].node), (yyvsp[-2].node));
-          break;
-        case NODE_REAL:
-          if ((yyvsp[0].node)->kind == NODE_NUMBER) {
-            (yyval.node) = (yyvsp[-2].node);
-            (yyvsp[-2].node)->v.real *= (yyvsp[0].node)->v.number;
-            break;
-          }
-          if ((yyvsp[0].node)->kind == NODE_REAL) {
-            (yyval.node) = (yyvsp[-2].node);
-            (yyvsp[-2].node)->v.real *= (yyvsp[0].node)->v.real;
-            break;
-          }
-          CREATE_BINARY_OP((yyval.node), F_MULTIPLY, result_type, (yyvsp[0].node), (yyvsp[-2].node));
-          break;
-        default:
-          CREATE_BINARY_OP((yyval.node), F_MULTIPLY, result_type, (yyvsp[-2].node), (yyvsp[0].node));
-      }
-    }
-#line 4375 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 116: /* primary_expr: functional_open ',' arg_list ':' ')'  */
+#line 578 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_functional_2(&(yyval.node), (yyvsp[-4].number), (yyvsp[-2].node)); }
+#line 3219 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 164: /* expr0: expr0 '%' expr0  */
-#line 1857 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = binary_int_op((yyvsp[-2].node), (yyvsp[0].node), F_MOD, "%");
-    }
-#line 4383 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 165: /* expr0: expr0 '/' expr0  */
-#line 1861 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int result_type;
-
-      if (exact_types){
-        int t1 = (yyvsp[-2].node)->type, t3 = (yyvsp[0].node)->type;
-
-        if (t1 == t3){
-          switch(t1){
-            case TYPE_NUMBER:
-            case TYPE_REAL:
-            case TYPE_ANY:
-              result_type = t1;
-              break;
-            default:
-              type_error("Bad argument 1 to '/'", t1);
-              result_type = TYPE_ANY;
-          }
-        } else if (t1 == TYPE_ANY || t3 == TYPE_ANY){
-          int t = (t1 == TYPE_ANY) ? t3 : t1;
-          if (t == TYPE_REAL || t == TYPE_NUMBER)
-            result_type = t;
-          else {
-            type_error(t1 == TYPE_ANY ?
-                "Bad argument 2 to '/'" :
-                "Bad argument 1 to '/'", t);
-            result_type = TYPE_ANY;
-          }
-        } else if ((t1 == TYPE_NUMBER && t3 == TYPE_REAL) ||
-            (t1 == TYPE_REAL && t3 == TYPE_NUMBER)) {
-          result_type = TYPE_REAL;
-        } else {
-          char buf[256];
-          char *end = EndOf(buf);
-          char *p;
-
-          p = strput(buf, end, "Invalid types to '/' ");
-          p = get_two_types(p, end, t1, t3);
-          yyerror(buf);
-          result_type = TYPE_ANY;
-        }
-      } else result_type = TYPE_ANY;
-
-      /* constant expressions */
-      switch ((yyvsp[-2].node)->kind) {
-        case NODE_NUMBER:
-          if ((yyvsp[0].node)->kind == NODE_NUMBER) {
-            if ((yyvsp[0].node)->v.number == 0) {
-              yyerror("Divide by zero in constant");
-              (yyval.node) = (yyvsp[-2].node);
-              break;
-            }
-            (yyval.node) = (yyvsp[-2].node);
-            (yyvsp[-2].node)->v.number /= (yyvsp[0].node)->v.number;
-            break;
-          }
-          if ((yyvsp[0].node)->kind == NODE_REAL) {
-            if ((yyvsp[0].node)->v.real == 0.0) {
-              yyerror("Divide by zero in constant");
-              (yyval.node) = (yyvsp[-2].node);
-              break;
-            }
-            (yyval.node) = (yyvsp[0].node);
-            (yyvsp[0].node)->v.real = ((yyvsp[-2].node)->v.number / (yyvsp[0].node)->v.real);
-            break;
-          }
-          CREATE_BINARY_OP((yyval.node), F_DIVIDE, result_type, (yyvsp[-2].node), (yyvsp[0].node));
-          break;
-        case NODE_REAL:
-          if ((yyvsp[0].node)->kind == NODE_NUMBER) {
-            if ((yyvsp[0].node)->v.number == 0) {
-              yyerror("Divide by zero in constant");
-              (yyval.node) = (yyvsp[-2].node);
-              break;
-            }
-            (yyval.node) = (yyvsp[-2].node);
-            (yyvsp[-2].node)->v.real /= (yyvsp[0].node)->v.number;
-            break;
-          }
-          if ((yyvsp[0].node)->kind == NODE_REAL) {
-            if ((yyvsp[0].node)->v.real == 0.0) {
-              yyerror("Divide by zero in constant");
-              (yyval.node) = (yyvsp[-2].node);
-              break;
-            }
-            (yyval.node) = (yyvsp[-2].node);
-            (yyvsp[-2].node)->v.real /= (yyvsp[0].node)->v.real;
-            break;
-          }
-          CREATE_BINARY_OP((yyval.node), F_DIVIDE, result_type, (yyvsp[-2].node), (yyvsp[0].node));
-          break;
-        default:
-          CREATE_BINARY_OP((yyval.node), F_DIVIDE, result_type, (yyvsp[-2].node), (yyvsp[0].node));
-      }
-    }
-#line 4482 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 166: /* expr0: cast expr0  */
-#line 1956 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = (yyvsp[0].node);
-      (yyval.node)->type = (yyvsp[-1].number);
-
-      if (exact_types &&
-          (yyvsp[0].node)->type != (yyvsp[-1].number) &&
-          (yyvsp[0].node)->type != TYPE_ANY &&
-          (yyvsp[0].node)->type != TYPE_UNKNOWN &&
-          (yyvsp[-1].number) != TYPE_VOID) {
-        char buf[256];
-        char *end = EndOf(buf);
-        char *p;
-
-        p = strput(buf, end, "Cannot cast ");
-        p = get_type_name(p, end, (yyvsp[0].node)->type);
-        p = strput(p, end, "to ");
-        p = get_type_name(p, end, (yyvsp[-1].number));
-        yyerror(buf);
-      }
-    }
-#line 4507 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 167: /* expr0: L_INC lvalue  */
-#line 1977 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_UNARY_OP((yyval.node), F_PRE_INC, 0, (yyvsp[0].node));
-      if (exact_types){
-        switch((yyvsp[0].node)->type){
-          case TYPE_NUMBER:
-          case TYPE_ANY:
-          case TYPE_REAL:
-            {
-              (yyval.node)->type = (yyvsp[0].node)->type;
-              break;
-            }
-
-          default:
-            {
-              (yyval.node)->type = TYPE_ANY;
-              type_error("Bad argument 1 to ++x", (yyvsp[0].node)->type);
-            }
-        }
-      } else (yyval.node)->type = TYPE_ANY;
-    }
-#line 4532 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 168: /* expr0: L_DEC lvalue  */
-#line 1998 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_UNARY_OP((yyval.node), F_PRE_DEC, 0, (yyvsp[0].node));
-      if (exact_types){
-        switch((yyvsp[0].node)->type){
-          case TYPE_NUMBER:
-          case TYPE_ANY:
-          case TYPE_REAL:
-            {
-              (yyval.node)->type = (yyvsp[0].node)->type;
-              break;
-            }
-
-          default:
-            {
-              (yyval.node)->type = TYPE_ANY;
-              type_error("Bad argument 1 to --x", (yyvsp[0].node)->type);
-            }
-        }
-      } else (yyval.node)->type = TYPE_ANY;
+  case 117: /* primary_expr: L_FUNCTION_OPEN L_DEFINED_NAME ':' ')'  */
+#line 587 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_functional_1(&(yyval.node), rule_functional_ref((yyvsp[-2].ihe))); }
+#line 3225 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-    }
-#line 4558 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 169: /* expr0: L_NOT expr0  */
-#line 2020 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[0].node)->kind == NODE_NUMBER) {
-        (yyval.node) = (yyvsp[0].node);
-        (yyval.node)->v.number = !((yyval.node)->v.number);
-      } else {
-        CREATE_UNARY_OP((yyval.node), F_NOT, TYPE_NUMBER, (yyvsp[0].node));
-      }
-    }
-#line 4571 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 170: /* expr0: '~' expr0  */
-#line 2029 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (exact_types && !IS_TYPE((yyvsp[0].node)->type, TYPE_NUMBER))
-        type_error("Bad argument to ~", (yyvsp[0].node)->type);
-      if ((yyvsp[0].node)->kind == NODE_NUMBER) {
-        (yyval.node) = (yyvsp[0].node);
-        (yyval.node)->v.number = ~(yyval.node)->v.number;
-      } else {
-        CREATE_UNARY_OP((yyval.node), F_COMPL, TYPE_NUMBER, (yyvsp[0].node));
-      }
-    }
-#line 4586 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 171: /* expr0: '-' expr0  */
-#line 2040 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int result_type;
-      if (exact_types){
-        int t = (yyvsp[0].node)->type;
-        if (!COMP_TYPE(t, TYPE_NUMBER)){
-          type_error("Bad argument to unary '-'", t);
-          result_type = TYPE_ANY;
-        } else result_type = t;
-      } else result_type = TYPE_ANY;
-
-      switch ((yyvsp[0].node)->kind) {
-        case NODE_NUMBER:
-          (yyval.node) = (yyvsp[0].node);
-          (yyval.node)->v.number = -(yyval.node)->v.number;
-          break;
-        case NODE_REAL:
-          (yyval.node) = (yyvsp[0].node);
-          (yyval.node)->v.real = -(yyval.node)->v.real;
-          break;
-        default:
-          CREATE_UNARY_OP((yyval.node), F_NEGATE, result_type, (yyvsp[0].node));
-      }
-    }
-#line 4614 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 172: /* expr0: lvalue L_INC  */
-#line 2064 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_UNARY_OP((yyval.node), F_POST_INC, 0, (yyvsp[-1].node));
-      (yyval.node)->v.number = F_POST_INC;
-      if (exact_types){
-        switch((yyvsp[-1].node)->type){
-          case TYPE_NUMBER:
-          case TYPE_ANY:
-          case TYPE_REAL:
-            {
-              (yyval.node)->type = (yyvsp[-1].node)->type;
-              break;
-            }
-
-          default:
-            {
-              (yyval.node)->type = TYPE_ANY;
-              type_error("Bad argument 1 to x++", (yyvsp[-1].node)->type);
-            }
-        }
-      } else (yyval.node)->type = TYPE_ANY;
-    }
-#line 4640 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 173: /* expr0: lvalue L_DEC  */
-#line 2086 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_UNARY_OP((yyval.node), F_POST_DEC, 0, (yyvsp[-1].node));
-      if (exact_types){
-        switch((yyvsp[-1].node)->type){
-          case TYPE_NUMBER:
-          case TYPE_ANY:
-          case TYPE_REAL:
-            {
-              (yyval.node)->type = (yyvsp[-1].node)->type;
-              break;
-            }
-
-          default:
-            {
-              (yyval.node)->type = TYPE_ANY;
-              type_error("Bad argument 1 to x--", (yyvsp[-1].node)->type);
-            }
-        }
-      } else (yyval.node)->type = TYPE_ANY;
-    }
-#line 4665 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 180: /* return: L_RETURN ';'  */
-#line 2116 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (exact_types && !IS_TYPE(exact_types, TYPE_VOID))
-        yywarn("Non-void functions must return a value.");
-      CREATE_RETURN((yyval.node), 0);
-    }
-#line 4675 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 181: /* return: L_RETURN comma_expr ';'  */
-#line 2122 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (exact_types && !compatible_types((yyvsp[-1].node)->type, exact_types)) {
-        char buf[256];
-        char *end = EndOf(buf);
-        char *p;
-
-        p = strput(buf, end, "Type of returned value doesn't match function return type ");
-        p = get_two_types(p, end, (yyvsp[-1].node)->type, exact_types);
-        yyerror(buf);
-      }
-      if (IS_NODE((yyvsp[-1].node), NODE_NUMBER, 0)) {
-        CREATE_RETURN((yyval.node), 0);
-      } else {
-        CREATE_RETURN((yyval.node), (yyvsp[-1].node));
-      }
-    }
-#line 4696 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 118: /* primary_expr: L_FUNCTION_OPEN L_DEFINED_NAME ',' arg_list ':' ')'  */
+#line 589 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_functional_2(&(yyval.node), rule_functional_ref((yyvsp[-4].ihe)), (yyvsp[-2].node)); }
+#line 3231 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 182: /* expr_list: %empty  */
-#line 2142 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-            {
-      CREATE_EXPR_LIST((yyval.node), 0);
-    }
-#line 4704 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 119: /* primary_expr: L_FUNCTION_OPEN comma_expr ':' ')'  */
+#line 591 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_primary_expr_functional_3(&(yyval.node), (yyvsp[-2].node)); }
+#line 3237 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 183: /* expr_list: expr_list2  */
-#line 2146 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_EXPR_LIST((yyval.node), (yyvsp[0].node));
-    }
-#line 4712 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 120: /* primary_expr: '(' '[' opt_pair_list ']' ')'  */
+#line 594 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                    { rule_primary_expr_mapping(&(yyval.node), (yyvsp[-2].node)); }
+#line 3243 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 184: /* expr_list: expr_list2 ','  */
-#line 2150 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_EXPR_LIST((yyval.node), (yyvsp[-1].node));
-    }
-#line 4720 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 121: /* primary_expr: '(' '{' opt_arg_list '}' ')'  */
+#line 595 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                    { rule_primary_expr_array(&(yyval.node), (yyvsp[-2].node)); }
+#line 3249 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 185: /* expr_list_node: expr0  */
-#line 2157 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_EXPR_NODE((yyval.node), (yyvsp[0].node), 0);
-    }
-#line 4728 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 122: /* call_open: '('  */
+#line 605 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+       { rule_call_open(&(yyval.call_open).saved_context, &(yyval.call_open).saved_refs); }
+#line 3255 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 186: /* expr_list_node: expr0 L_DOT_DOT_DOT  */
-#line 2161 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_EXPR_NODE((yyval.node), (yyvsp[-1].node), 1);
-    }
-#line 4736 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 123: /* function_call: efun_override call_open opt_arg_list ')'  */
+#line 619 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_function_call_efun(&(yyval.node), (yyvsp[-3].number), (yyvsp[-1].node), (yyvsp[-2].call_open).saved_context, (yyvsp[-2].call_open).saved_refs); }
+#line 3261 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 187: /* expr_list2: expr_list_node  */
-#line 2168 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyvsp[0].node)->kind = 1;
-      (yyval.node) = (yyvsp[0].node);
-    }
-#line 4745 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 124: /* function_call: L_NEW call_open opt_arg_list ')'  */
+#line 621 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_function_call_new(&(yyval.node), (yyvsp[-1].node), (yyvsp[-2].call_open).saved_context, (yyvsp[-2].call_open).saved_refs); }
+#line 3267 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 188: /* expr_list2: expr_list2 ',' expr_list_node  */
-#line 2173 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyvsp[0].node)->kind = 0;
+  case 125: /* function_call: L_NEW '(' L_CLASS L_DEFINED_NAME opt_class_init ')'  */
+#line 623 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_function_call_new_class(&(yyval.node), (yyvsp[-2].ihe), (yyvsp[-1].node)); }
+#line 3273 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
 
-      (yyval.node) = (yyvsp[-2].node);
-      (yyval.node)->kind++;
-      (yyval.node)->l.expr->r.expr = (yyvsp[0].node);
-      (yyval.node)->l.expr = (yyvsp[0].node);
-    }
-#line 4758 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 126: /* function_call: L_NEW '(' L_CLASS L_IDENTIFIER opt_class_init ')'  */
+#line 625 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_function_call_new_class_undef(&(yyval.node), (yyvsp[-2].string), (yyvsp[-1].node)); }
+#line 3279 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 189: /* expr_list3: %empty  */
-#line 2185 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-            {
-      /* this is a dummy node */
-      CREATE_EXPR_LIST((yyval.node), 0);
-    }
-#line 4767 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 127: /* function_call: L_DEFINED_NAME call_open opt_arg_list ')'  */
+#line 627 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_function_call_defined_name(&(yyval.node), (yyvsp[-3].ihe), (yyvsp[-1].node), (yyvsp[-2].call_open).saved_context, (yyvsp[-2].call_open).saved_refs); }
+#line 3285 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 190: /* expr_list3: expr_list4  */
-#line 2190 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_EXPR_LIST((yyval.node), (yyvsp[0].node));
-    }
-#line 4775 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 128: /* function_call: function_name call_open opt_arg_list ')'  */
+#line 629 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_function_call_name(&(yyval.node), (yyvsp[-3].string), (yyvsp[-1].node), (yyvsp[-2].call_open).saved_context, (yyvsp[-2].call_open).saved_refs); }
+#line 3291 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 191: /* expr_list3: expr_list4 ','  */
-#line 2194 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_EXPR_LIST((yyval.node), (yyvsp[-1].node));
-    }
-#line 4783 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 192: /* expr_list4: assoc_pair  */
-#line 2201 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = new_node_no_line();
-      (yyval.node)->kind = 2;
-      (yyval.node)->v.expr = (yyvsp[0].node);
-      (yyval.node)->r.expr = 0;
-      (yyval.node)->type = 0;
-      /* we keep track of the end of the chain in the left nodes */
-      (yyval.node)->l.expr = (yyval.node);
-    }
-#line 4797 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 193: /* expr_list4: expr_list4 ',' assoc_pair  */
-#line 2211 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      parse_node_t *expr;
-
-      expr = new_node_no_line();
-      expr->kind = 0;
-      expr->v.expr = (yyvsp[0].node);
-      expr->r.expr = 0;
-      expr->type = 0;
-
-      (yyvsp[-2].node)->l.expr->r.expr = expr;
-      (yyvsp[-2].node)->l.expr = expr;
-      (yyvsp[-2].node)->kind += 2;
-      (yyval.node) = (yyvsp[-2].node);
-    }
-#line 4816 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 129: /* function_call: primary_expr '[' comma_expr ']' call_open opt_arg_list ')'  */
+#line 631 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_function_call_indexed(&(yyval.node), (yyvsp[-6].node), (yyvsp[-4].node), (yyvsp[-1].node), (yyvsp[-2].call_open).saved_context, (yyvsp[-2].call_open).saved_refs); }
+#line 3297 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 194: /* assoc_pair: expr0 ':' expr0  */
-#line 2229 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_TWO_VALUES((yyval.node), 0, (yyvsp[-2].node), (yyvsp[0].node));
-    }
-#line 4824 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 195: /* lvalue: expr4  */
-#line 2236 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-#define LV_ILLEGAL 1
-#define LV_RANGE 2
-#define LV_INDEX 4
-      /* Restrictive lvalues, but I think they make more sense :) */
-      (yyval.node) = (yyvsp[0].node);
-      if((yyval.node)->kind == NODE_BINARY_OP && (yyval.node)->v.number == F_TYPE_CHECK)
-        (yyval.node) = (yyval.node)->l.expr;
-      switch((yyval.node)->kind) {
-        default:
-          yyerror("Illegal lvalue");
-          break;
-        case NODE_PARAMETER:
-          (yyval.node)->kind = NODE_PARAMETER_LVALUE;
-          break;
-        case NODE_TERNARY_OP:
-          (yyval.node)->v.number = (yyval.node)->r.expr->v.number;
-        case NODE_OPCODE_1:
-        case NODE_UNARY_OP_1:
-        case NODE_BINARY_OP:
-          if ((yyval.node)->v.number >= F_LOCAL && (yyval.node)->v.number <= F_MEMBER)
-            (yyval.node)->v.number++; /* make it an lvalue */
-          else if ((yyval.node)->v.number >= F_INDEX
-              && (yyval.node)->v.number <= F_RE_RANGE) {
-            parse_node_t *node = (yyval.node);
-            int flag = 0;
-            do {
-              switch(node->kind) {
-                case NODE_PARAMETER:
-                  node->kind = NODE_PARAMETER_LVALUE;
-                  flag |= LV_ILLEGAL;
-                  break;
-                case NODE_TERNARY_OP:
-                  node->v.number = node->r.expr->v.number;
-                case NODE_OPCODE_1:
-                case NODE_UNARY_OP_1:
-                case NODE_BINARY_OP:
-                  if(node->kind == NODE_BINARY_OP &&
-                      node->v.number == F_TYPE_CHECK) {
-                    node = node->l.expr;
-                    continue;
-                  }
-
-                  if (node->v.number >= F_LOCAL
-                      && node->v.number <= F_MEMBER) {
-                    node->v.number++;
-                    flag |= LV_ILLEGAL;
-                    break;
-                  } else if (node->v.number == F_INDEX ||
-                      node->v.number == F_RINDEX) {
-                    node->v.number++;
-                    flag |= LV_INDEX;
-                    break;
-                  } else if (node->v.number >= F_ADD_EQ
-                      && node->v.number <= F_ASSIGN) {
-                    if (!(flag & LV_INDEX)) {
-                      yyerror("Illegal lvalue, a possible lvalue is (x <assign> y)[a]");
-                    }
-                    if (node->r.expr->kind == NODE_BINARY_OP||
-                        node->r.expr->kind == NODE_TERNARY_OP){
-                      if (node->r.expr->v.number >= F_NN_RANGE_LVALUE && node->r.expr->v.number <= F_NR_RANGE_LVALUE)
-                        yyerror("Illegal to have (x[a..b] <assign> y) to be the beginning of an lvalue");
-                    }
-                    flag = LV_ILLEGAL;
-                    break;
-                  } else if (node->v.number >= F_NN_RANGE
-                      && node->v.number <= F_RE_RANGE) {
-                    if (flag & LV_RANGE) {
-                      yyerror("Can't do range lvalue of range lvalue.");
-                      flag |= LV_ILLEGAL;
-                      break;
-                    }
-                    if (flag & LV_INDEX){
-                      yyerror("Can't do indexed lvalue of range lvalue.");
-                      flag |= LV_ILLEGAL;
-                      break;
-                    }
-                    if (node->v.number == F_NE_RANGE) {
-                      /* x[foo..] -> x[foo..<1] */
-                      parse_node_t *rchild = node->r.expr;
-                      node->kind = NODE_TERNARY_OP;
-                      CREATE_BINARY_OP(node->r.expr,
-                          F_NR_RANGE_LVALUE,
-                          0, 0, rchild);
-                      CREATE_NUMBER(node->r.expr->l.expr, 1);
-                    } else if (node->v.number == F_RE_RANGE) {
-                      /* x[<foo..] -> x[<foo..<1] */
-                      parse_node_t *rchild = node->r.expr;
-                      node->kind = NODE_TERNARY_OP;
-                      CREATE_BINARY_OP(node->r.expr,
-                          F_RR_RANGE_LVALUE,
-                          0, 0, rchild);
-                      CREATE_NUMBER(node->r.expr->l.expr, 1);
-                    } else
-                      node->r.expr->v.number++;
-                    flag |= LV_RANGE;
-                    node = node->r.expr->r.expr;
-                    continue;
-                  }
-                default:
-                  yyerror("Illegal lvalue");
-                  flag = LV_ILLEGAL;
-                  break;
-              }
-              if ((flag & LV_ILLEGAL) || !(node = node->r.expr)) break;
-            } while (1);
-            break;
-          } else
-            yyerror("Illegal lvalue");
-          break;
-      }
-    }
-#line 4941 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 130: /* function_call: primary_expr L_ARROW identifier call_open opt_arg_list ')'  */
+#line 633 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_function_call_arrow(&(yyval.node), (yyvsp[-5].node), (yyvsp[-3].string), (yyvsp[-1].node), (yyvsp[-2].call_open).saved_context, (yyvsp[-2].call_open).saved_refs); }
+#line 3303 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 197: /* l_new_function_open: L_FUNCTION_OPEN efun_override  */
-#line 2353 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = ((yyvsp[0].number) << 8) | FP_EFUN;
-    }
-#line 4949 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 199: /* expr4: L_DEFINED_NAME  */
-#line 2361 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int i;
-      if ((i = (yyvsp[0].ihe)->dn.local_num) != -1) {
-        type_of_locals_ptr[i] &= ~LOCAL_MOD_UNUSED;
-        if (type_of_locals_ptr[i] & LOCAL_MOD_REF)
-          CREATE_OPCODE_1((yyval.node), F_REF, type_of_locals_ptr[i] & ~LOCAL_MOD_REF,i & 0xff);
-        else
-          CREATE_OPCODE_1((yyval.node), F_LOCAL, type_of_locals_ptr[i], i & 0xff);
-        if (current_function_context)
-          current_function_context->num_locals++;
-      } else
-        if ((i = (yyvsp[0].ihe)->dn.global_num) != -1) {
-          if (current_function_context)
-            current_function_context->bindable = FP_NOT_BINDABLE;
-          CREATE_OPCODE_1((yyval.node), F_GLOBAL,
-              VAR_TEMP(i)->type & ~DECL_MODS, i);
-          if (VAR_TEMP(i)->type & DECL_HIDDEN) {
-            char buf[256];
-            char *end = EndOf(buf);
-            char *p;
-
-            p = strput(buf, end, "Illegal to use private variable '");
-            p = strput(p, end, (yyvsp[0].ihe)->name);
-            p = strput(p, end, "'");
-            yyerror(buf);
-          }
-        } else if ((yyvsp[0].ihe)->dn.function_num != -1) {
-          /* Local function - create function pointer */
-          (yyval.node) = new_node();
-          (yyval.node)->kind = NODE_FUNCTION_CONSTRUCTOR;
-          (yyval.node)->type = TYPE_FUNCTION;
-          (yyval.node)->r.expr = 0;
-          (yyval.node)->l.expr = 0;
-          (yyval.node)->v.number = ((yyvsp[0].ihe)->dn.function_num << 8) | FP_LOCAL;
-          
-          if (current_function_context)
-            current_function_context->bindable = FP_NOT_BINDABLE;
-        } else if ((yyvsp[0].ihe)->dn.simul_num != -1) {
-          /* Simul efun - create function pointer */
-          (yyval.node) = new_node();
-          (yyval.node)->kind = NODE_FUNCTION_CONSTRUCTOR;
-          (yyval.node)->type = TYPE_FUNCTION;
-          (yyval.node)->r.expr = 0;
-          (yyval.node)->l.expr = 0;
-          (yyval.node)->v.number = ((yyvsp[0].ihe)->dn.simul_num << 8) | FP_SIMUL;
-          
-          if (current_function_context)
-            current_function_context->bindable = FP_NOT_BINDABLE;
-        } else if ((yyvsp[0].ihe)->dn.efun_num != -1) {
-          /* Efun - create function pointer */
-          (yyval.node) = new_node();
-          (yyval.node)->kind = NODE_FUNCTION_CONSTRUCTOR;
-          (yyval.node)->type = TYPE_FUNCTION;
-          (yyval.node)->r.expr = 0;
-          (yyval.node)->l.expr = 0;
-          (yyval.node)->v.number = ((yyvsp[0].ihe)->dn.efun_num << 8) | FP_EFUN;
-        } else {
-          char buf[256];
-          char *end = EndOf(buf);
-          char *p;
-
-          auto max_local_variables = CFG_INT(__MAX_LOCAL_VARIABLES__);
-          p = strput(buf, end, "Undefined variable '");
-          p = strput(p, end, (yyvsp[0].ihe)->name);
-          p = strput(p, end, "'");
-          if (current_number_of_locals < max_local_variables) {
-            add_local_name((yyvsp[0].ihe)->name, TYPE_ANY);
-          }
-          CREATE_ERROR((yyval.node));
-          yyerror(buf);
-        }
-    }
-#line 5026 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 200: /* expr4: L_IDENTIFIER  */
-#line 2434 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      char buf[256];
-      char *end = EndOf(buf);
-      char *p;
-
-      /* Treat bare identifiers as function pointers - let compiler resolve them later */
-      (yyval.node) = new_node();
-      (yyval.node)->kind = NODE_FUNCTION_CONSTRUCTOR;
-      (yyval.node)->type = TYPE_FUNCTION;
-      (yyval.node)->r.expr = 0;
-      CREATE_STRING((yyval.node)->l.expr, (yyvsp[0].string));
-      (yyval.node)->v.number = FP_FUNCTIONAL;
-      
-      /* Mark as not bindable - same as (: funcname :) syntax */
-      if (current_function_context)
-        current_function_context->bindable = FP_NOT_BINDABLE;
-    }
-#line 5048 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 131: /* function_call: '(' '*' comma_expr ')' call_open opt_arg_list ')'  */
+#line 635 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_function_call_star(&(yyval.node), (yyvsp[-4].node), (yyvsp[-1].node), (yyvsp[-2].call_open).saved_context, (yyvsp[-2].call_open).saved_refs); }
+#line 3309 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 201: /* expr4: L_PARAMETER  */
-#line 2452 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_PARAMETER((yyval.node), TYPE_ANY, (yyvsp[0].number));
-    }
-#line 5056 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 202: /* @13: %empty  */
-#line 2456 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.contextp) = current_function_context;
-      /* already flagged as an error */
-      if (current_function_context)
-        current_function_context = current_function_context->parent;
-    }
-#line 5067 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 203: /* expr4: '$' '(' @13 comma_expr ')'  */
-#line 2463 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      parse_node_t *node;
-
-      current_function_context = (yyvsp[-2].contextp);
-
-      if (!current_function_context || current_function_context->num_parameters < 0) {
-        /* This was illegal, and error'ed when the '$' token
-         * was returned.
-         */
-        CREATE_ERROR((yyval.node));
-      } else {
-        CREATE_OPCODE_1((yyval.node), F_LOCAL, (yyvsp[-1].node)->type,
-            current_function_context->values_list->kind++);
-
-        node = new_node_no_line();
-        node->type = 0;
-        current_function_context->values_list->l.expr->r.expr = node;
-        current_function_context->values_list->l.expr = node;
-        node->r.expr = 0;
-        node->v.expr = (yyvsp[-1].node);
-      }
-    }
-#line 5094 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 204: /* expr4: expr4 L_ARROW identifier  */
-#line 2486 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[-2].node)->type == TYPE_ANY) {
-        int cmi;
-        unsigned short tp;
-
-        if ((cmi = lookup_any_class_member((yyvsp[0].string), &tp)) != -1) {
-          CREATE_UNARY_OP_1((yyval.node), F_MEMBER, tp, (yyvsp[-2].node), 0);
-          (yyval.node)->l.number = cmi;
-        } else {
-          CREATE_ERROR((yyval.node));
-        }
-      } else if (!IS_CLASS((yyvsp[-2].node)->type)) {
-        yyerror("Left argument of -> is not a class");
-        CREATE_ERROR((yyval.node));
-      } else {
-        CREATE_UNARY_OP_1((yyval.node), F_MEMBER, 0, (yyvsp[-2].node), 0);
-        (yyval.node)->l.number = lookup_class_member(CLASS_IDX((yyvsp[-2].node)->type),
-            (yyvsp[0].string),
-            &((yyval.node)->type));
-      }
-
-      scratch_free((yyvsp[0].string));
-    }
-#line 5122 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 205: /* expr4: expr4 L_DOT identifier  */
-#line 2510 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[-2].node)->type == TYPE_ANY) {
-        int cmi;
-        unsigned short tp;
-
-        if ((cmi = lookup_any_class_member((yyvsp[0].string), &tp)) != -1) {
-          CREATE_UNARY_OP_1((yyval.node), F_MEMBER, tp, (yyvsp[-2].node), 0);
-          (yyval.node)->l.number = cmi;
-        } else {
-          CREATE_ERROR((yyval.node));
-        }
-      } else if (!IS_CLASS((yyvsp[-2].node)->type)) {
-        yyerror("Left argument of . is not a class");
-        CREATE_ERROR((yyval.node));
-      } else {
-        CREATE_UNARY_OP_1((yyval.node), F_MEMBER, 0, (yyvsp[-2].node), 0);
-        (yyval.node)->l.number = lookup_class_member(CLASS_IDX((yyvsp[-2].node)->type),
-            (yyvsp[0].string),
-            &((yyval.node)->type));
-      }
-
-      scratch_free((yyvsp[0].string));
-    }
-#line 5150 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 206: /* expr4: expr4 '[' comma_expr L_RANGE comma_expr ']'  */
-#line 2534 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-    if (!CONFIG_INT(__RC_OLD_RANGE_BEHAVIOR__)) {
-      if (CONFIG_INT(__RC_WARN_OLD_RANGE_BEHAVIOR__)) {
-      if ((yyvsp[-5].node)->type != TYPE_MAPPING &&
-          (yyvsp[-1].node)->kind == NODE_NUMBER && (yyvsp[-1].node)->v.number < 0)
-        yywarn("A negative constant as the second element of arr[x..y] no longer means indexing from the end.  Use arr[x..<y]");
-      }
-    }
-      (yyval.node) = make_range_node(F_NN_RANGE, (yyvsp[-5].node), (yyvsp[-3].node), (yyvsp[-1].node));
-    }
-#line 5165 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 132: /* sscanf: L_SSCANF '(' expr ',' expr lvalue_list ')'  */
+#line 646 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_sscanf(&(yyval.node), (yyvsp[-4].node), (yyvsp[-2].node), (yyvsp[-1].node)); }
+#line 3315 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 207: /* expr4: expr4 '[' '<' comma_expr L_RANGE comma_expr ']'  */
-#line 2545 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = make_range_node(F_RN_RANGE, (yyvsp[-6].node), (yyvsp[-3].node), (yyvsp[-1].node));
-    }
-#line 5173 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 208: /* expr4: expr4 '[' '<' comma_expr L_RANGE '<' comma_expr ']'  */
-#line 2549 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[-1].node)->kind == NODE_NUMBER && (yyvsp[-1].node)->v.number <= 1)
-        (yyval.node) = make_range_node(F_RE_RANGE, (yyvsp[-7].node), (yyvsp[-4].node), 0);
-      else
-        (yyval.node) = make_range_node(F_RR_RANGE, (yyvsp[-7].node), (yyvsp[-4].node), (yyvsp[-1].node));
-    }
-#line 5184 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 209: /* expr4: expr4 '[' comma_expr L_RANGE '<' comma_expr ']'  */
-#line 2556 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[-1].node)->kind == NODE_NUMBER && (yyvsp[-1].node)->v.number <= 1)
-        (yyval.node) = make_range_node(F_NE_RANGE, (yyvsp[-6].node), (yyvsp[-4].node), 0);
-      else
-        (yyval.node) = make_range_node(F_NR_RANGE, (yyvsp[-6].node), (yyvsp[-4].node), (yyvsp[-1].node));
-    }
-#line 5195 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 133: /* parse_command: L_PARSE_COMMAND '(' expr ',' expr ',' expr lvalue_list ')'  */
+#line 652 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_parse_command(&(yyval.node), (yyvsp[-6].node), (yyvsp[-4].node), (yyvsp[-2].node), (yyvsp[-1].node)); }
+#line 3321 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 210: /* expr4: expr4 '[' comma_expr L_RANGE ']'  */
-#line 2563 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = make_range_node(F_NE_RANGE, (yyvsp[-4].node), (yyvsp[-2].node), 0);
-    }
-#line 5203 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 134: /* catch: L_CATCH special_context_start expr_or_block  */
+#line 658 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_catch(&(yyval.node), (yyvsp[0].node), (yyvsp[-1].number)); }
+#line 3327 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 211: /* expr4: expr4 '[' '<' comma_expr L_RANGE ']'  */
-#line 2567 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = make_range_node(F_RE_RANGE, (yyvsp[-5].node), (yyvsp[-2].node), 0);
-    }
-#line 5211 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 212: /* expr4: expr4 '[' '<' comma_expr ']'  */
-#line 2571 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (IS_NODE((yyvsp[-4].node), NODE_CALL, F_AGGREGATE)
-          && (yyvsp[-1].node)->kind == NODE_NUMBER) {
-        int i = (yyvsp[-1].node)->v.number;
-        if (i < 1 || i > (yyvsp[-4].node)->l.number)
-          yyerror("Illegal index to array constant.");
-        else {
-          parse_node_t *node = (yyvsp[-4].node)->r.expr;
-          i = (yyvsp[-4].node)->l.number - i;
-          while (i--)
-            node = node->r.expr;
-          (yyval.node) = node->v.expr;
-          break;
-        }
-      }
-      CREATE_BINARY_OP((yyval.node), F_RINDEX, 0, (yyvsp[-1].node), (yyvsp[-4].node));
-      if (exact_types) {
-        switch((yyvsp[-4].node)->type) {
-          case TYPE_MAPPING:
-            yyerror("Illegal index for mapping.");
-          case TYPE_ANY:
-            (yyval.node)->type = TYPE_ANY;
-            break;
-          case TYPE_STRING:
-          case TYPE_BUFFER:
-            (yyval.node)->type = TYPE_NUMBER;
-            if (!IS_TYPE((yyvsp[-1].node)->type,TYPE_NUMBER))
-              type_error("Bad type of index", (yyvsp[-1].node)->type);
-            break;
-
-          default:
-            if ((yyvsp[-4].node)->type & TYPE_MOD_ARRAY) {
-              (yyval.node)->type = (yyvsp[-4].node)->type & ~TYPE_MOD_ARRAY;
-              if ((yyval.node)->type != TYPE_ANY)
-                (yyval.node) = add_type_check((yyval.node), (yyval.node)->type);
-              if (!IS_TYPE((yyvsp[-1].node)->type,TYPE_NUMBER))
-                type_error("Bad type of index", (yyvsp[-1].node)->type);
-            } else {
-              type_error("Value indexed has a bad type ", (yyvsp[-4].node)->type);
-              (yyval.node)->type = TYPE_ANY;
-            }
-        }
-      } else (yyval.node)->type = TYPE_ANY;
-    }
-#line 5260 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 213: /* expr4: expr4 '[' comma_expr ']'  */
-#line 2616 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      /* Something stupid like ({ 1, 2, 3 })[1]; we take the
-       * time to optimize this because people who don't understand
-       * the preprocessor often write things like:
-       *
-       * #define MY_ARRAY ({ "foo", "bar", "bazz" })
-       * ...
-       * ... MY_ARRAY[1] ...
-       *
-       * which of course expands to the above.
-       */
-      if (IS_NODE((yyvsp[-3].node), NODE_CALL, F_AGGREGATE) && (yyvsp[-1].node)->kind == NODE_NUMBER) {
-        int i = (yyvsp[-1].node)->v.number;
-        if (i < 0 || i >= (yyvsp[-3].node)->l.number)
-          yyerror("Illegal index to array constant.");
-        else {
-          parse_node_t *node = (yyvsp[-3].node)->r.expr;
-          while (i--)
-            node = node->r.expr;
-          (yyval.node) = node->v.expr;
-          break;
-        }
-      }
-#ifndef OLD_RANGE_BEHAVIOR
-      if ((yyvsp[-1].node)->kind == NODE_NUMBER && (yyvsp[-1].node)->v.number < 0)
-        yywarn("A negative constant in arr[x] no longer means indexing from the end.  Use arr[<x]");
-#endif
-      CREATE_BINARY_OP((yyval.node), F_INDEX, 0, (yyvsp[-1].node), (yyvsp[-3].node));
-      if (exact_types) {
-        switch((yyvsp[-3].node)->type) {
-          case TYPE_MAPPING:
-          case TYPE_ANY:
-            (yyval.node)->type = TYPE_ANY;
-            break;
-          case TYPE_STRING:
-          case TYPE_BUFFER:
-            (yyval.node)->type = TYPE_NUMBER;
-            if (!IS_TYPE((yyvsp[-1].node)->type,TYPE_NUMBER))
-              type_error("Bad type of index", (yyvsp[-1].node)->type);
-            break;
-
-          default:
-            if ((yyvsp[-3].node)->type & TYPE_MOD_ARRAY) {
-              (yyval.node)->type = (yyvsp[-3].node)->type & ~TYPE_MOD_ARRAY;
-              if((yyval.node)->type != TYPE_ANY)
-                (yyval.node) = add_type_check((yyval.node), (yyval.node)->type);
-              if (!IS_TYPE((yyvsp[-1].node)->type,TYPE_NUMBER))
-                type_error("Bad type of index", (yyvsp[-1].node)->type);
-            } else {
-              type_error("Value indexed has a bad type ", (yyvsp[-3].node)->type);
-              (yyval.node)->type = TYPE_ANY;
-            }
-        }
-      } else (yyval.node)->type = TYPE_ANY;
-    }
-#line 5320 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 135: /* time_expression: L_TIME_EXPRESSION special_context_start expr_or_block  */
+#line 664 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_time_expression(&(yyval.node), (yyvsp[0].node), (yyvsp[-1].number)); }
+#line 3333 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 215: /* expr4: '(' comma_expr ')'  */
-#line 2673 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = (yyvsp[-1].node);
-    }
-#line 5328 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 218: /* @14: %empty  */
-#line 2679 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      auto max_local_variables = CFG_INT(__MAX_LOCAL_VARIABLES__);
-
-      if ((yyvsp[0].number) != TYPE_FUNCTION) yyerror("Reserved type name unexpected.");
-      (yyval.func_block).num_local = current_number_of_locals;
-      (yyval.func_block).max_num_locals = max_num_locals;
-      (yyval.func_block).context = context;
-      (yyval.func_block).save_current_type = current_type;
-      (yyval.func_block).save_exact_types = exact_types;
-      if (type_of_locals_ptr + max_num_locals + max_local_variables >= &type_of_locals[type_of_locals_size])
-        reallocate_locals();
-      deactivate_current_locals();
-      locals_ptr += current_number_of_locals;
-      type_of_locals_ptr += max_num_locals;
-      max_num_locals = current_number_of_locals = 0;
-      push_function_context();
-      current_function_context->num_parameters = -1;
-      exact_types = TYPE_ANY;
-      context = 0;
-    }
-#line 5353 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 219: /* expr4: L_BASIC_TYPE @14 '(' argument ')' block  */
-#line 2700 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if ((yyvsp[-2].argument).flags & ARG_IS_VARARGS) {
-        yyerror("Anonymous varargs functions aren't implemented");
-      }
-      if (!(yyvsp[0].decl).node) {
-        CREATE_RETURN((yyvsp[0].decl).node, 0);
-      } else if ((yyvsp[0].decl).node->kind != NODE_RETURN &&
-          ((yyvsp[0].decl).node->kind != NODE_TWO_VALUES || (yyvsp[0].decl).node->r.expr->kind != NODE_RETURN)) {
-        parse_node_t *replacement;
-        CREATE_STATEMENTS(replacement, (yyvsp[0].decl).node, 0);
-        CREATE_RETURN(replacement->r.expr, 0);
-        (yyvsp[0].decl).node = replacement;
-      }
-
-      (yyval.node) = new_node();
-      (yyval.node)->kind = NODE_ANON_FUNC;
-      (yyval.node)->type = TYPE_FUNCTION;
-      (yyval.node)->l.number = (max_num_locals - (yyvsp[-2].argument).num_arg);
-      (yyval.node)->r.expr = (yyvsp[0].decl).node;
-      (yyval.node)->v.number = (yyvsp[-2].argument).num_arg;
-      if (current_function_context->bindable)
-        (yyval.node)->v.number |= 0x10000;
-      free_all_local_names(1);
-
-      current_number_of_locals = (yyvsp[-4].func_block).num_local;
-      max_num_locals = (yyvsp[-4].func_block).max_num_locals;
-      context = (yyvsp[-4].func_block).context;
-      current_type = (yyvsp[-4].func_block).save_current_type;
-      exact_types = (yyvsp[-4].func_block).save_exact_types;
-      pop_function_context();
-
-      locals_ptr -= current_number_of_locals;
-      type_of_locals_ptr -= max_num_locals;
-      reactivate_current_locals();
-    }
-#line 5393 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 220: /* expr4: l_new_function_open ':' ')'  */
-#line 2736 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (CONFIG_INT(__RC_WOMBLES__)) {
-        if(*(outp-2) != ':') {
-          yyerror("End of functional not found");
-        }
-      }
-      (yyval.node) = new_node();
-      (yyval.node)->kind = NODE_FUNCTION_CONSTRUCTOR;
-      (yyval.node)->type = TYPE_FUNCTION;
-      (yyval.node)->r.expr = 0;
-      switch ((yyvsp[-2].number) & 0xff) {
-        case FP_L_VAR:
-          yyerror("Illegal to use local variable in a functional.");
-          CREATE_NUMBER((yyval.node)->l.expr, 0);
-          (yyval.node)->l.expr->r.expr = 0;
-          (yyval.node)->l.expr->l.expr = 0;
-          (yyval.node)->v.number = FP_FUNCTIONAL;
-          break;
-        case FP_G_VAR:
-          CREATE_OPCODE_1((yyval.node)->l.expr, F_GLOBAL, 0, (yyvsp[-2].number) >> 8);
-          (yyval.node)->v.number = FP_FUNCTIONAL | FP_NOT_BINDABLE;
-          if (VAR_TEMP((yyval.node)->l.expr->l.number)->type & DECL_HIDDEN) {
-            char buf[256];
-            char *end = EndOf(buf);
-            char *p;
-
-            p = strput(buf, end, "Illegal to use private variable '");
-            p = strput(p, end, VAR_TEMP((yyval.node)->l.expr->l.number)->name);
-            p = strput(p, end, "'");
-            yyerror(buf);
-          }
-          break;
-        default:
-          (yyval.node)->v.number = (yyvsp[-2].number);
-          break;
-      }
-    }
-#line 5435 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 221: /* expr4: l_new_function_open ',' expr_list2 ':' ')'  */
-#line 2774 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (CONFIG_INT(__RC_WOMBLES__)) {
-        if(*(outp-2) != ':') {
-          yyerror("End of functional not found");
-        }
-      }
-      (yyval.node) = new_node();
-      (yyval.node)->kind = NODE_FUNCTION_CONSTRUCTOR;
-      (yyval.node)->type = TYPE_FUNCTION;
-      (yyval.node)->v.number = (yyvsp[-4].number);
-      (yyval.node)->r.expr = (yyvsp[-2].node);
-
-      switch ((yyvsp[-4].number) & 0xff) {
-        case FP_EFUN: {
-                        int *argp;
-                        int f = (yyvsp[-4].number) >>8;
-                        int num = (yyvsp[-2].node)->kind;
-                        int max_arg = predefs[f].max_args;
-                        if(f!=-1){
-                          if (num > max_arg && max_arg != -1) {
-                            parse_node_t *pn = (yyvsp[-2].node);
-
-                            while (pn) {
-                              if (pn->type & 1) break;
-                              pn = pn->r.expr;
-                            }
-
-                            if (!pn) {
-                              char bff[256];
-                              char *end = EndOf(bff);
-                              char *p;
-
-                              p = strput(bff, end, "Too many arguments to ");
-                              p = strput(p, end, predefs[f].word);
-                              yyerror(bff);
-                            }
-                          } else if (max_arg != -1 && exact_types) {
-                            /*
-                             * Now check all types of arguments to efuns.
-                             */
-                            int i, argn, tmp;
-                            parse_node_t *enode = (yyvsp[-2].node);
-                            argp = &efun_arg_types[predefs[f].arg_index];
-
-                            for (argn = 0; argn < num; argn++) {
-                              if (enode->type & 1) break;
-
-                              tmp = enode->v.expr->type;
-                              for (i=0; !compatible_types(tmp, argp[i])
-                                  && argp[i] != 0; i++)
-                                ;
-                              if (argp[i] == 0) {
-                                char buf[256];
-                                char *end = EndOf(buf);
-                                char *p;
-
-                                p = strput(buf, end, "Bad argument ");
-                                p = strput_int(p, end, argn+1);
-                                p = strput(p, end, " to efun ");
-                                p = strput(p, end, predefs[f].word);
-                                p = strput(p, end, "()");
-                                yyerror(buf);
-                              } else {
-                                /* this little section necessary b/c in the
-                                   case float | int we dont want to do
-                                   promoting. */
-                                if (tmp == TYPE_NUMBER && argp[i] == TYPE_REAL) {
-                                  for (i++; argp[i] && argp[i] != TYPE_NUMBER; i++)
-                                    ;
-                                  if (!argp[i])
-                                    enode->v.expr = promote_to_float(enode->v.expr);
-                                }
-                                if (tmp == TYPE_REAL && argp[i] == TYPE_NUMBER) {
-                                  for (i++; argp[i] && argp[i] != TYPE_REAL; i++)
-                                    ;
-                                  if (!argp[i])
-                                    enode->v.expr = promote_to_int(enode->v.expr);
-                                }
-                              }
-                              while (argp[i] != 0)
-                                i++;
-                              argp += i + 1;
-                              enode = enode->r.expr;
-                            }
-                          }
-                        }
-                        break;
-                      }
-        case FP_L_VAR:
-        case FP_G_VAR:
-                      yyerror("Can't give parameters to functional.");
-                      break;
-      }
-    }
-#line 5534 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 222: /* expr4: L_FUNCTION_OPEN comma_expr ':' ')'  */
-#line 2869 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (CONFIG_INT(__RC_WOMBLES__)) {
-        if(*(outp-2) != ':') {
-          yyerror("End of functional not found");
-        }
-      }
-      if (current_function_context->num_locals)
-        yyerror("Illegal to use local variable in functional.");
-      if (current_function_context->values_list->r.expr)
-        current_function_context->values_list->r.expr->kind = current_function_context->values_list->kind;
-
-      (yyval.node) = new_node();
-      (yyval.node)->kind = NODE_FUNCTION_CONSTRUCTOR;
-      (yyval.node)->type = TYPE_FUNCTION;
-      (yyval.node)->l.expr = (yyvsp[-2].node);
-      if ((yyvsp[-2].node)->kind == NODE_STRING)
-        yywarn("Function pointer returning string constant is NOT a function call");
-      (yyval.node)->r.expr = current_function_context->values_list->r.expr;
-      (yyval.node)->v.number = FP_FUNCTIONAL + current_function_context->bindable
-        + (current_function_context->num_parameters << 8);
-      pop_function_context();
-    }
-#line 5561 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 223: /* expr4: L_MAPPING_OPEN expr_list3 ']' ')'  */
-#line 2892 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (CONFIG_INT(__RC_WOMBLES__)) {
-        if(*(outp-2) != ']') {
-          yyerror("End of mapping not found");
-        }
-      }
-      CREATE_CALL((yyval.node), F_AGGREGATE_ASSOC, TYPE_MAPPING, (yyvsp[-2].node));
-    }
-#line 5574 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 224: /* expr4: L_ARRAY_OPEN expr_list '}' ')'  */
-#line 2901 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      if (CONFIG_INT(__RC_WOMBLES__)) {
-        if(*(outp-2) != '}') {
-          yyerror("End of array not found");
-        }
-      }
-      CREATE_CALL((yyval.node), F_AGGREGATE, TYPE_ANY | TYPE_MOD_ARRAY, (yyvsp[-2].node));
-    }
-#line 5587 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 136: /* tree: L_TREE block  */
+#line 670 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_tree_block(&(yyval.node), (yyvsp[0].decl).node); }
+#line 3339 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 225: /* expr_or_block: block  */
-#line 2913 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = (yyvsp[0].decl).node;
-    }
-#line 5595 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 137: /* tree: L_TREE '(' comma_expr ')'  */
+#line 672 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_tree_expr(&(yyval.node), (yyvsp[-1].node)); }
+#line 3345 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 226: /* expr_or_block: '(' comma_expr ')'  */
-#line 2917 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = insert_pop_value((yyvsp[-1].node));
-    }
-#line 5603 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 138: /* switch_header: L_SWITCH '(' comma_expr ')'  */
+#line 683 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { (yyval.switch_header).expr = (yyvsp[-1].node); rule_switch_pre(&(yyval.switch_header).saved_context, &(yyval.switch_header).saved_cases_size); }
+#line 3351 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 227: /* @15: %empty  */
-#line 2924 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = context;
-      context = SPECIAL_CONTEXT;
-    }
-#line 5612 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 139: /* switch_block: case switch_block  */
+#line 688 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                   { rule_switch_block_case(&(yyval.node), (yyvsp[-1].node), (yyvsp[0].node)); }
+#line 3357 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 228: /* catch: L_CATCH @15 expr_or_block  */
-#line 2929 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_CATCH((yyval.node), (yyvsp[0].node));
-      context = (yyvsp[-1].number);
-    }
-#line 5621 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 229: /* tree: L_TREE block  */
-#line 2937 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-#ifdef DEBUG
-      (yyval.node) = new_node_no_line();
-      lpc_tree_form((yyvsp[0].decl).node, (yyval.node));
-#endif
-    }
-#line 5632 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 230: /* tree: L_TREE '(' comma_expr ')'  */
-#line 2944 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-#ifdef DEBUG
-      (yyval.node) = new_node_no_line();
-      lpc_tree_form((yyvsp[-1].node), (yyval.node));
-#endif
-    }
-#line 5643 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 231: /* sscanf: L_SSCANF '(' expr0 ',' expr0 lvalue_list ')'  */
-#line 2954 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int p = (yyvsp[-1].node)->v.number;
-      CREATE_LVALUE_EFUN((yyval.node), TYPE_NUMBER, (yyvsp[-1].node));
-      CREATE_BINARY_OP_1((yyval.node)->l.expr, F_SSCANF, 0, (yyvsp[-4].node), (yyvsp[-2].node), p);
-    }
-#line 5653 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 232: /* parse_command: L_PARSE_COMMAND '(' expr0 ',' expr0 ',' expr0 lvalue_list ')'  */
-#line 2963 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int p = (yyvsp[-1].node)->v.number;
-      CREATE_LVALUE_EFUN((yyval.node), TYPE_NUMBER, (yyvsp[-1].node));
-      CREATE_TERNARY_OP_1((yyval.node)->l.expr, F_PARSE_COMMAND, 0,
-          (yyvsp[-6].node), (yyvsp[-4].node), (yyvsp[-2].node), p);
-    }
-#line 5664 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 140: /* switch_block: statement switch_block  */
+#line 689 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                   { rule_switch_block_stmt(&(yyval.node), (yyvsp[-1].node), (yyvsp[0].node)); }
+#line 3363 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 233: /* @16: %empty  */
-#line 2973 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = context;
-      context = SPECIAL_CONTEXT;
-    }
-#line 5673 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 141: /* switch_block: %empty  */
+#line 690 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                            { rule_switch_block_empty(&(yyval.node)); }
+#line 3369 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 234: /* time_expression: L_TIME_EXPRESSION @16 expr_or_block  */
-#line 2978 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_TIME_EXPRESSION((yyval.node), (yyvsp[0].node));
-      context = (yyvsp[-1].number);
-    }
-#line 5682 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 235: /* lvalue_list: %empty  */
-#line 2986 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-            {
-      (yyval.node) = new_node_no_line();
-      (yyval.node)->r.expr = 0;
-      (yyval.node)->v.number = 0;
-    }
-#line 5692 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 236: /* lvalue_list: ',' lvalue lvalue_list  */
-#line 2992 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      parse_node_t *insert;
-
-      (yyval.node) = (yyvsp[0].node);
-      insert = new_node_no_line();
-      insert->r.expr = (yyvsp[0].node)->r.expr;
-      insert->l.expr = (yyvsp[-1].node);
-      (yyvsp[0].node)->r.expr = insert;
-      (yyval.node)->v.number++;
-    }
-#line 5707 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 142: /* case: L_CASE case_label ':'  */
+#line 697 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_case_single(&(yyval.node), (yyvsp[-1].node)); }
+#line 3375 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 237: /* string: string_con2  */
-#line 3006 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      CREATE_STRING((yyval.node), (yyvsp[0].string));
-      scratch_free((yyvsp[0].string));
-    }
-#line 5716 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 143: /* case: L_CASE case_label L_RANGE case_label ':'  */
+#line 699 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_case_range(&(yyval.node), (yyvsp[-3].node), (yyvsp[-1].node)); }
+#line 3381 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 239: /* string_con1: '(' string_con1 ')'  */
-#line 3015 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.string) = (yyvsp[-1].string);
-    }
-#line 5724 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 144: /* case: L_CASE case_label L_RANGE ':'  */
+#line 701 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_case_range_from(&(yyval.node), (yyvsp[-2].node)); }
+#line 3387 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 240: /* string_con1: string_con1 '+' string_con1  */
-#line 3019 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.string) = scratch_join((yyvsp[-2].string), (yyvsp[0].string));
-    }
-#line 5732 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 145: /* case: L_CASE L_RANGE case_label ':'  */
+#line 703 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_case_range_to(&(yyval.node), (yyvsp[-1].node)); }
+#line 3393 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 242: /* string_con2: string_con2 L_STRING  */
-#line 3027 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.string) = scratch_join((yyvsp[-1].string), (yyvsp[0].string));
-    }
-#line 5740 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 243: /* class_init: identifier ':' expr0  */
-#line 3034 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = new_node();
-      (yyval.node)->l.expr = (parse_node_t *)(yyvsp[-2].string);
-      (yyval.node)->v.expr = (yyvsp[0].node);
-      (yyval.node)->r.expr = 0;
-    }
-#line 5751 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 146: /* case: L_DEFAULT ':'  */
+#line 705 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_case_default(&(yyval.node)); }
+#line 3399 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 244: /* opt_class_init: %empty  */
-#line 3044 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-            {
-      (yyval.node) = 0;
-    }
-#line 5759 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 147: /* case_label: constant  */
+#line 711 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                  { rule_case_label_constant(&(yyval.node), (yyvsp[0].number)); }
+#line 3405 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 245: /* opt_class_init: opt_class_init ',' class_init  */
-#line 3048 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = (yyvsp[0].node);
-      (yyval.node)->r.expr = (yyvsp[-2].node);
-    }
-#line 5768 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 246: /* @17: %empty  */
-#line 3056 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = context;
-      (yyvsp[0].number) = num_refs;
-      context |= ARG_LIST;
-    }
-#line 5778 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 247: /* function_call: efun_override '(' @17 expr_list ')'  */
-#line 3062 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      context = (yyvsp[-2].number);
-      (yyval.node) = validate_efun_call((yyvsp[-4].number),(yyvsp[-1].node));
-      (yyval.node) = check_refs(num_refs - (yyvsp[-3].number), (yyvsp[-1].node), (yyval.node));
-      num_refs = (yyvsp[-3].number);
-    }
-#line 5789 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 248: /* @18: %empty  */
-#line 3069 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = context;
-      (yyvsp[0].number) = num_refs;
-      context |= ARG_LIST;
-    }
-#line 5799 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 249: /* function_call: L_NEW '(' @18 expr_list ')'  */
-#line 3075 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      ident_hash_elem_t *ihe;
-      int f;
-
-      context = (yyvsp[-2].number);
-      ihe = lookup_ident("clone_object");
-
-      if ((f = ihe->dn.simul_num) != -1) {
-        (yyval.node) = (yyvsp[-1].node);
-        (yyval.node)->kind = NODE_CALL_1;
-        (yyval.node)->v.number = F_SIMUL_EFUN;
-        (yyval.node)->l.number = f;
-        (yyval.node)->type = (SIMUL(f)->type) & ~DECL_MODS;
-      } else {
-        (yyval.node) = validate_efun_call(lookup_predef("clone_object"), (yyvsp[-1].node));
-#ifdef CAST_CALL_OTHERS
-        (yyval.node)->type = TYPE_UNKNOWN;
-#else
-        (yyval.node)->type = TYPE_ANY;
-#endif
-      }
-      (yyval.node) = check_refs(num_refs - (yyvsp[-3].number), (yyvsp[-1].node), (yyval.node));
-      num_refs = (yyvsp[-3].number);
-    }
-#line 5828 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 250: /* function_call: L_NEW '(' L_CLASS L_DEFINED_NAME opt_class_init ')'  */
-#line 3100 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      parse_node_t *node;
-
-      if ((yyvsp[-2].ihe)->dn.class_num == -1) {
-        char buf[256];
-        char *end = EndOf(buf);
-        char *p;
-
-        p = strput(buf, end, "Undefined class '");
-        p = strput(p, end, (yyvsp[-2].ihe)->name);
-        p = strput(p, end, "'");
-        yyerror(buf);
-        CREATE_ERROR((yyval.node));
-        node = (yyvsp[-1].node);
-        while (node) {
-          scratch_free((char *)node->l.expr);
-          node = node->r.expr;
-        }
-      } else {
-        int type = (yyvsp[-2].ihe)->dn.class_num | TYPE_MOD_CLASS;
-
-        if ((node = (yyvsp[-1].node))) {
-          CREATE_TWO_VALUES((yyval.node), type, 0, 0);
-          (yyval.node)->l.expr = reorder_class_values((yyvsp[-2].ihe)->dn.class_num,
-              node);
-          CREATE_OPCODE_1((yyval.node)->r.expr, F_NEW_CLASS,
-              type, (yyvsp[-2].ihe)->dn.class_num);
-
-        } else {
-          CREATE_OPCODE_1((yyval.node), F_NEW_EMPTY_CLASS,
-              type, (yyvsp[-2].ihe)->dn.class_num);
-        }
-      }
-    }
-#line 5867 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 251: /* function_call: L_NEW '(' L_CLASS L_IDENTIFIER opt_class_init ')'  */
-#line 3135 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      parse_node_t *node;
-      char buf[256];
-      char *end = EndOf(buf);
-      char *p;
-
-      p = strput(buf, end, "Undefined class '");
-      p = strput(p, end, (yyvsp[-2].string));
-      p = strput(p, end, "'");
-      yyerror(buf);
-      CREATE_ERROR((yyval.node));
-      node = (yyvsp[-1].node);
-      while (node) {
-        scratch_free((char *)node->l.expr);
-        node = node->r.expr;
-      }
-    }
-#line 5889 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 252: /* @19: %empty  */
-#line 3153 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = context;
-      (yyvsp[0].number) = num_refs;
-      context |= ARG_LIST;
-    }
-#line 5899 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 253: /* function_call: L_DEFINED_NAME '(' @19 expr_list ')'  */
-#line 3159 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int f;
-      int i;
-
-      context = (yyvsp[-2].number);
-      (yyval.node) = (yyvsp[-1].node);
-      if ((f = (yyvsp[-4].ihe)->dn.function_num) != -1) {
-        if (current_function_context)
-          current_function_context->bindable = FP_NOT_BINDABLE;
-
-        (yyval.node)->kind = NODE_CALL_1;
-        (yyval.node)->v.number = F_CALL_FUNCTION_BY_ADDRESS;
-        (yyval.node)->l.number = f;
-        (yyval.node)->type = validate_function_call(f, (yyvsp[-1].node)->r.expr);
-      } else if ((f=(yyvsp[-4].ihe)->dn.simul_num) != -1) {
-        (yyval.node)->kind = NODE_CALL_1;
-        (yyval.node)->v.number = F_SIMUL_EFUN;
-        (yyval.node)->l.number = f;
-        (yyval.node)->type = (SIMUL(f)->type) & ~DECL_MODS;
-      } else if ((f=(yyvsp[-4].ihe)->dn.efun_num) != -1) {
-        (yyval.node) = validate_efun_call(f, (yyvsp[-1].node));
-      } else if ((i = (yyvsp[-4].ihe)->dn.local_num) != -1 && 
-                 ((type_of_locals_ptr[i] & ~LOCAL_MODS) == TYPE_FUNCTION ||
-                  (type_of_locals_ptr[i] & ~LOCAL_MODS) == TYPE_ANY ||
-                  (type_of_locals_ptr[i] & ~LOCAL_MODS) == TYPE_UNKNOWN)) {
-        /* Local variable that may hold a function pointer - generate evaluate() call */
-        parse_node_t *expr;
-        parse_node_t *func_node;
-        int local_type = type_of_locals_ptr[i] & ~LOCAL_MODS;
-        
-        type_of_locals_ptr[i] &= ~LOCAL_MOD_UNUSED;
-        
-        /* Create node to load the function variable */
-        if (type_of_locals_ptr[i] & LOCAL_MOD_REF)
-          CREATE_OPCODE_1(func_node, F_REF, local_type, i & 0xff);
-        else
-          CREATE_OPCODE_1(func_node, F_LOCAL, local_type, i & 0xff);
-        
-        /* Generate evaluate(func_var, args...) */
-        (yyval.node)->kind = NODE_EFUN;
-        (yyval.node)->l.number = (yyval.node)->v.number + 1;
-        (yyval.node)->v.number = predefs[evaluate_efun].token;
-#ifdef CAST_CALL_OTHERS
-        (yyval.node)->type = TYPE_UNKNOWN;
-#else
-        (yyval.node)->type = TYPE_ANY;
-#endif
-        expr = new_node_no_line();
-        expr->type = 0;
-        expr->v.expr = func_node;
-        expr->r.expr = (yyval.node)->r.expr;
-        (yyval.node)->r.expr = expr;
-        
-        if (current_function_context)
-          current_function_context->num_locals++;
-      } else if ((i = (yyvsp[-4].ihe)->dn.global_num) != -1 && 
-                 ((VAR_TEMP(i)->type & ~DECL_MODS) == TYPE_FUNCTION ||
-                  (VAR_TEMP(i)->type & ~DECL_MODS) == TYPE_ANY ||
-                  (VAR_TEMP(i)->type & ~DECL_MODS) == TYPE_UNKNOWN)) {
-        /* Global variable that may hold a function pointer - generate evaluate() call */
-        parse_node_t *expr;
-        parse_node_t *func_node;
-        int global_type = VAR_TEMP(i)->type & ~DECL_MODS;
-        
-        if (current_function_context)
-          current_function_context->bindable = FP_NOT_BINDABLE;
-        
-        /* Create node to load the function variable */
-        CREATE_OPCODE_1(func_node, F_GLOBAL, global_type, i);
-        
-        if (VAR_TEMP(i)->type & DECL_HIDDEN) {
-          char buf[256];
-          char *end = EndOf(buf);
-          char *p;
-
-          p = strput(buf, end, "Illegal to use private variable '");
-          p = strput(p, end, (yyvsp[-4].ihe)->name);
-          p = strput(p, end, "'");
-          yyerror(buf);
-        }
-        
-        /* Generate evaluate(func_var, args...) */
-        (yyval.node)->kind = NODE_EFUN;
-        (yyval.node)->l.number = (yyval.node)->v.number + 1;
-        (yyval.node)->v.number = predefs[evaluate_efun].token;
-#ifdef CAST_CALL_OTHERS
-        (yyval.node)->type = TYPE_UNKNOWN;
-#else
-        (yyval.node)->type = TYPE_ANY;
-#endif
-        expr = new_node_no_line();
-        expr->type = 0;
-        expr->v.expr = func_node;
-        expr->r.expr = (yyval.node)->r.expr;
-        (yyval.node)->r.expr = expr;
-      } else {
-        /* This here is a really nasty case that only occurs with
-         * exact_types off.  The user has done something gross like:
-         *
-         * func() { int f; f(); } // if f was prototyped we wouldn't
-         * f() { }                // need this case
-         */
-        if (exact_types) {
-          char buf[256];
-          char *end = EndOf(buf);
-          char *p;
-          const char *n = (yyvsp[-4].ihe)->name;
-          if (*n == ':') n++;
-          p = strput(buf, end, "Undefined function ");
-          p = strput(p, end, n);
-          yyerror(buf);
-        } else {
-          /*
-           * Don't complain, just grok it.
-           */
-          if (current_function_context)
-            current_function_context->bindable = FP_NOT_BINDABLE;
-
-          f = define_new_function((yyvsp[-4].ihe)->name, 0, 0, DECL_PUBLIC|FUNC_UNDEFINED, TYPE_ANY);
-          (yyval.node)->kind = NODE_CALL_1;
-          (yyval.node)->v.number = F_CALL_FUNCTION_BY_ADDRESS;
-          (yyval.node)->l.number = f;
-          (yyval.node)->type = TYPE_ANY; /* just a guess */
-        }
-      }
-      (yyval.node) = check_refs(num_refs - (yyvsp[-3].number), (yyvsp[-1].node), (yyval.node));
-      num_refs = (yyvsp[-3].number);
-    }
-#line 6032 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 254: /* @20: %empty  */
-#line 3288 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = context;
-      (yyvsp[0].number) = num_refs;
-      context |= ARG_LIST;
-    }
-#line 6042 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 255: /* function_call: function_name '(' @20 expr_list ')'  */
-#line 3294 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      char *name = (yyvsp[-4].string);
-
-      context = (yyvsp[-2].number);
-      (yyval.node) = (yyvsp[-1].node);
-
-      if (current_function_context)
-        current_function_context->bindable = FP_NOT_BINDABLE;
-
-      if (*name == ':') {
-        int f;
-
-        if ((f = arrange_call_inherited(name + 1, (yyval.node))) != -1)
-          /* Can't do this; f may not be the correct function
-             entry.  It might be overloaded.
-
-             validate_function_call(f, $$->r.expr)
-             */
-          ;
-      } else {
-        /* The only way this can happen is if function_name
-         * below made the function name. (directly or inherited.)
-         * The lexer would return L_DEFINED_NAME otherwise.
-         */
-        int f;
-        ident_hash_elem_t *ihe;
-
-        f = (ihe = lookup_ident(name)) ? ihe->dn.function_num : -1;
-
-        // Funciton is not yet defined. for exact_types case, we simply return error,
-        // otherwise attempt to create a function, hoping later it will be defined by inherit.
-        if (f == -1) {
-          if (exact_types) {
-            char buf[256];
-            char *end = EndOf(buf);
-            char *p;
-            char *n = (yyvsp[-4].string);
-            if (*n == ':') n++;
-            p = strput(buf, end, "Undefined function ");
-            p = strput(p, end, n);
-            yyerror(buf);
-          } else {
-            f = define_new_function(name, 0, 0, DECL_PUBLIC|FUNC_UNDEFINED, TYPE_ANY);
-          }
-        }
-
-        if (f != -1) {
-          (yyval.node)->kind = NODE_CALL_1;
-          (yyval.node)->v.number = F_CALL_FUNCTION_BY_ADDRESS;
-          (yyval.node)->l.number = f;
-          if (FUNCTION_FLAGS(f) & FUNC_UNDEFINED) {
-            (yyval.node)->type = TYPE_ANY;  /* Just a guess */
-          } else {
-            (yyval.node)->type = validate_function_call(f, (yyvsp[-1].node)->r.expr);
-          }
-        }
-      }
-      (yyval.node) = check_refs(num_refs - (yyvsp[-3].number), (yyvsp[-1].node), (yyval.node));
-      num_refs = (yyvsp[-3].number);
-      scratch_free(name);
-    }
-#line 6108 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 256: /* @21: %empty  */
-#line 3356 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = context;
-      (yyvsp[0].number) = num_refs;
-      context |= ARG_LIST;
-    }
-#line 6118 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 257: /* function_call: expr4 '[' comma_expr ']' '(' @21 expr_list ')'  */
-#line 3362 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      parse_node_t *expr;
-      parse_node_t *index_expr;
-
-      context = (yyvsp[-2].number);
-      (yyval.node) = (yyvsp[-1].node);
-
-      /* Create the indexing expression */
-      CREATE_BINARY_OP(index_expr, F_INDEX, 0, (yyvsp[-5].node), (yyvsp[-7].node));
-      if (exact_types) {
-        switch((yyvsp[-7].node)->type) {
-          case TYPE_MAPPING:
-          case TYPE_ANY:
-            index_expr->type = TYPE_ANY;
-            break;
-          default:
-            if ((yyvsp[-7].node)->type & TYPE_MOD_ARRAY) {
-              index_expr->type = (yyvsp[-7].node)->type & ~TYPE_MOD_ARRAY;
-            } else {
-              index_expr->type = TYPE_ANY;
-            }
-            break;
-        }
-      } else {
-        index_expr->type = TYPE_ANY;
-      }
-
-      /* Generate evaluate(indexed_expr, args...) */
-      (yyval.node)->kind = NODE_EFUN;
-      (yyval.node)->l.number = (yyval.node)->v.number + 1;
-      (yyval.node)->v.number = predefs[evaluate_efun].token;
-#ifdef CAST_CALL_OTHERS
-      (yyval.node)->type = TYPE_UNKNOWN;
-#else
-      (yyval.node)->type = TYPE_ANY;
-#endif
-      expr = new_node_no_line();
-      expr->type = 0;
-      expr->v.expr = index_expr;
-      expr->r.expr = (yyval.node)->r.expr;
-      (yyval.node)->r.expr = expr;
-      (yyval.node) = check_refs(num_refs - (yyvsp[-3].number), (yyvsp[-1].node), (yyval.node));
-      num_refs = (yyvsp[-3].number);
-    }
-#line 6167 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 258: /* @22: %empty  */
-#line 3407 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = context;
-      (yyvsp[0].number) = num_refs;
-      context |= ARG_LIST;
-    }
-#line 6177 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 259: /* function_call: expr4 L_ARROW identifier '(' @22 expr_list ')'  */
-#line 3413 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      ident_hash_elem_t *ihe;
-      int f;
-      parse_node_t *pn1, *pn2;
-
-      (yyvsp[-1].node)->v.number += 2;
-
-      pn1 = new_node_no_line();
-      pn1->type = 0;
-      pn1->v.expr = (yyvsp[-6].node);
-      pn1->kind = (yyvsp[-1].node)->v.number;
-
-      pn2 = new_node_no_line();
-      pn2->type = 0;
-      CREATE_STRING(pn2->v.expr, (yyvsp[-4].string));
-      scratch_free((yyvsp[-4].string));
-
-      /* insert the two nodes */
-      pn2->r.expr = (yyvsp[-1].node)->r.expr;
-      pn1->r.expr = pn2;
-      (yyvsp[-1].node)->r.expr = pn1;
-
-      if (!(yyvsp[-1].node)->l.expr) (yyvsp[-1].node)->l.expr = pn2;
-
-      context = (yyvsp[-2].number);
-      ihe = lookup_ident("call_other");
-
-      if ((f = ihe->dn.simul_num) != -1) {
-        (yyval.node) = (yyvsp[-1].node);
-        (yyval.node)->kind = NODE_CALL_1;
-        (yyval.node)->v.number = F_SIMUL_EFUN;
-        (yyval.node)->l.number = f;
-        (yyval.node)->type = (SIMUL(f)->type) & ~DECL_MODS;
-      } else {
-        (yyval.node) = validate_efun_call(arrow_efun, (yyvsp[-1].node));
-#ifdef CAST_CALL_OTHERS
-        (yyval.node)->type = TYPE_UNKNOWN;
-#else
-        (yyval.node)->type = TYPE_ANY;
-#endif
-      }
-      (yyval.node) = check_refs(num_refs - (yyvsp[-3].number), (yyvsp[-1].node), (yyval.node));
-      num_refs = (yyvsp[-3].number);
-    }
-#line 6226 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 260: /* @23: %empty  */
-#line 3458 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.number) = context;
-      (yyvsp[0].number) = num_refs;
-      context |= ARG_LIST;
-    }
-#line 6236 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 261: /* function_call: '(' '*' comma_expr ')' '(' @23 expr_list ')'  */
-#line 3464 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      parse_node_t *expr;
-
-      context = (yyvsp[-2].number);
-      (yyval.node) = (yyvsp[-1].node);
-      (yyval.node)->kind = NODE_EFUN;
-      (yyval.node)->l.number = (yyval.node)->v.number + 1;
-      (yyval.node)->v.number = predefs[evaluate_efun].token;
-#ifdef CAST_CALL_OTHERS
-      (yyval.node)->type = TYPE_UNKNOWN;
-#else
-      (yyval.node)->type = TYPE_ANY;
-#endif
-      expr = new_node_no_line();
-      expr->type = 0;
-      expr->v.expr = (yyvsp[-5].node);
-      expr->r.expr = (yyval.node)->r.expr;
-      (yyval.node)->r.expr = expr;
-      (yyval.node) = check_refs(num_refs - (yyvsp[-3].number), (yyvsp[-1].node), (yyval.node));
-      num_refs = (yyvsp[-3].number);
-    }
-#line 6262 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 262: /* efun_override: L_EFUN L_COLON_COLON identifier  */
-#line 3489 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      svalue_t *res;
-      ident_hash_elem_t *ihe;
-
-      (yyval.number) = (ihe = lookup_ident((yyvsp[0].string))) ? ihe->dn.efun_num : -1;
-      if ((yyval.number) == -1) {
-        yyerror("Unknown efun: %s", (yyvsp[0].string));
-      } else {
-        push_malloced_string(the_file_name(current_file));
-        share_and_push_string((yyvsp[0].string));
-        push_malloced_string(add_slash(main_file_name()));
-        res = safe_apply_master_ob(APPLY_VALID_OVERRIDE, 3);
-        if (!MASTER_APPROVED(res)) {
-          yyerror("Invalid simulated efunction override");
-          (yyval.number) = -1;
-        }
-      }
-      scratch_free((yyvsp[0].string));
-    }
-#line 6286 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 263: /* efun_override: L_EFUN L_COLON_COLON L_NEW  */
-#line 3509 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      svalue_t *res;
-
-      push_malloced_string(the_file_name(current_file));
-      push_constant_string("new");
-      push_malloced_string(add_slash(main_file_name()));
-      res = safe_apply_master_ob(APPLY_VALID_OVERRIDE, 3);
-      if (!MASTER_APPROVED(res)) {
-        yyerror("Invalid simulated efunction override");
-        (yyval.number) = -1;
-      } else (yyval.number) = new_efun;
-    }
-#line 6303 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 265: /* function_name: L_COLON_COLON identifier  */
-#line 3526 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int l = strlen((yyvsp[0].string)) + 1;
-      char *p;
-      /* here we be a bit cute.  we put a : on the front so we
-       * don't have to strchr for it.  Here we do:
-       * "name" -> ":::name"
-       */
-      (yyval.string) = scratch_realloc((yyvsp[0].string), l + 3);
-      p = (yyval.string) + l;
-      while (p--,l--)
-        *(p+3) = *p;
-      strncpy((yyval.string), ":::", 3);
-    }
-#line 6321 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 266: /* function_name: L_BASIC_TYPE L_COLON_COLON identifier  */
-#line 3540 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int z, l = strlen((yyvsp[0].string)) + 1;
-      char *p;
-      /* <type> and "name" -> ":type::name" */
-      z = strlen(compiler_type_names[(yyvsp[-2].number)]) + 3; /* length of :type:: */
-      (yyval.string) = scratch_realloc((yyvsp[0].string), l + z);
-      p = (yyval.string) + l;
-      while (p--,l--)
-        *(p+z) = *p;
-      (yyval.string)[0] = ':';
-      strncpy((yyval.string) + 1, compiler_type_names[(yyvsp[-2].number)], z - 3);
-      (yyval.string)[z-2] = ':';
-      (yyval.string)[z-1] = ':';
-    }
-#line 6340 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 267: /* function_name: identifier L_COLON_COLON identifier  */
-#line 3555 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      int l = strlen((yyvsp[-2].string));
-      /* "ob" and "name" -> ":ob::name" */
-      (yyval.string) = scratch_alloc(l + strlen((yyvsp[0].string)) + 4);
-      *((yyval.string)) = ':';
-      strcpy((yyval.string) + 1, (yyvsp[-2].string));
-      strcpy((yyval.string) + l + 1, "::");
-      strcpy((yyval.string) + l + 3, (yyvsp[0].string));
-      scratch_free((yyvsp[-2].string));
-      scratch_free((yyvsp[0].string));
-    }
-#line 6356 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
-    break;
-
-  case 268: /* cond: L_IF '(' comma_expr ')' statement optional_else_part  */
-#line 3570 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      /* x != 0 -> x */
-      if (IS_NODE((yyvsp[-3].node), NODE_BINARY_OP, F_NE)) {
-        if (IS_NODE((yyvsp[-3].node)->r.expr, NODE_NUMBER, 0))
-          (yyvsp[-3].node) = (yyvsp[-3].node)->l.expr;
-        else if (IS_NODE((yyvsp[-3].node)->l.expr, NODE_NUMBER, 0))
-          (yyvsp[-3].node) = (yyvsp[-3].node)->r.expr;
-      }
-
-      /* TODO: should optimize if (0), if (1) here.
-       * Also generalize this.
-       */
-
-      if ((yyvsp[-1].node) == 0) {
-        if ((yyvsp[0].node) == 0) {
-          /* if (x) ; -> x; */
-          (yyval.node) = pop_value((yyvsp[-3].node));
-          break;
-        } else {
-          /* if (x) {} else y; -> if (!x) y; */
-          parse_node_t *repl;
-
-          CREATE_UNARY_OP(repl, F_NOT, TYPE_NUMBER, (yyvsp[-3].node));
-          (yyvsp[-3].node) = repl;
-          (yyvsp[-1].node) = (yyvsp[0].node);
-          (yyvsp[0].node) = 0;
-        }
-      }
-      CREATE_IF((yyval.node), (yyvsp[-3].node), (yyvsp[-1].node), (yyvsp[0].node));
-    }
-#line 6391 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 148: /* case_label: string_const  */
+#line 712 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                  { rule_case_label_string(&(yyval.node), (yyvsp[0].string)); }
+#line 3411 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 269: /* optional_else_part: %empty  */
-#line 3604 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = 0;
-    }
-#line 6399 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 149: /* for_expr: %empty  */
+#line 722 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+              { (yyval.node) = 0; }
+#line 3417 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
-  case 270: /* optional_else_part: L_ELSE statement  */
-#line 3608 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
-    {
-      (yyval.node) = (yyvsp[0].node);
-    }
-#line 6407 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+  case 151: /* for_init: for_expr  */
+#line 729 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_for_init_expr(&(yyval.decl), (yyvsp[0].node)); }
+#line 3423 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 152: /* for_init: single_new_local_def_with_init  */
+#line 731 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_for_init_local(&(yyval.decl), (yyvsp[0].node)); }
+#line 3429 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 153: /* foreach_var: L_DEFINED_NAME  */
+#line 736 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                          { rule_foreach_var_defined(&(yyval.decl), (yyvsp[0].ihe)); }
+#line 3435 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 154: /* foreach_var: single_new_local_def  */
+#line 737 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                          { rule_foreach_var_new_local(&(yyval.decl), (yyvsp[0].number)); }
+#line 3441 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 155: /* foreach_var: L_IDENTIFIER  */
+#line 738 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                          { rule_foreach_var_identifier(&(yyval.decl), (yyvsp[0].string)); }
+#line 3447 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 156: /* foreach_vars: foreach_var  */
+#line 744 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_foreach_vars_single(&(yyval.decl), &(yyvsp[0].decl)); }
+#line 3453 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 157: /* foreach_vars: foreach_var ',' foreach_var  */
+#line 746 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_foreach_vars_double(&(yyval.decl), &(yyvsp[-2].decl), &(yyvsp[0].decl)); }
+#line 3459 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 158: /* type_decl: class_header member_list '}'  */
+#line 757 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_define_class_members((yyvsp[-2].class_header).ihe, (yyvsp[-2].class_header).classname_index); (yyval.node) = 0; }
+#line 3465 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 159: /* class_header: type_modifier_list L_CLASS identifier '{'  */
+#line 763 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { (yyval.class_header).ihe = rule_define_class(&(yyval.class_header).classname_index, (yyvsp[-1].string)); }
+#line 3471 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 161: /* $@3: %empty  */
+#line 769 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                           { rule_member_list_set_type((yyvsp[0].number)); }
+#line 3477 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 165: /* member_name: optional_star identifier  */
+#line 781 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                            { rule_member_name((yyvsp[-1].number), (yyvsp[0].string)); }
+#line 3483 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 166: /* class_init: identifier ':' expr  */
+#line 786 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                       { (yyval.node) = rule_class_init((yyvsp[-2].string), (yyvsp[0].node)); }
+#line 3489 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 167: /* opt_class_init: %empty  */
+#line 791 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                   { (yyval.node) = rule_opt_class_init_empty(); }
+#line 3495 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 168: /* opt_class_init: opt_class_init ',' class_init  */
+#line 792 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                         { (yyval.node) = rule_opt_class_init((yyvsp[-2].node), (yyvsp[0].node)); }
+#line 3501 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 169: /* type: type_modifier_list opt_basic_type  */
+#line 804 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                     { (yyval.number) = rule_type((yyvsp[-1].number), (yyvsp[0].number)); }
+#line 3507 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 170: /* type_modifier_list: %empty  */
+#line 809 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                         { (yyval.number) = 0; }
+#line 3513 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 171: /* type_modifier_list: L_TYPE_MODIFIER type_modifier_list  */
+#line 810 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                               { (yyval.number) = rule_type_modifier_list((yyvsp[-1].number), (yyvsp[0].number)); }
+#line 3519 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 173: /* opt_basic_type: %empty  */
+#line 816 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+            { (yyval.number) = rule_opt_basic_type_empty(); }
+#line 3525 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 175: /* basic_type: opt_atomic_type L_ARRAY  */
+#line 822 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                             { (yyval.number) = (yyvsp[-1].number) | TYPE_MOD_ARRAY; }
+#line 3531 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 177: /* opt_atomic_type: %empty  */
+#line 828 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+            { (yyval.number) = rule_opt_basic_type_empty(); }
+#line 3537 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 179: /* atomic_type: L_CLASS L_DEFINED_NAME  */
+#line 834 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                            { (yyval.number) = rule_atomic_type_class((yyvsp[0].ihe)); }
+#line 3543 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 180: /* atomic_type: L_CLASS L_IDENTIFIER  */
+#line 835 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                            { (yyval.number) = rule_atomic_type_class_identifier((yyvsp[0].string)); }
+#line 3549 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 182: /* arg_type: basic_type ref  */
+#line 841 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                    { (yyval.number) = (yyvsp[-1].number) | LOCAL_MOD_REF; }
+#line 3555 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 183: /* cast: '(' basic_type optional_star ')'  */
+#line 846 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                    { (yyval.number) = rule_cast((yyvsp[-2].number), (yyvsp[-1].number)); }
+#line 3561 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 184: /* optional_star: %empty  */
+#line 851 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+          { (yyval.number) = 0; }
+#line 3567 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 185: /* optional_star: '*'  */
+#line 852 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+          { (yyval.number) = TYPE_MOD_ARRAY; }
+#line 3573 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 186: /* identifier: L_DEFINED_NAME  */
+#line 862 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                  { (yyval.string) = rule_identifier_defined_name((yyvsp[0].ihe)); }
+#line 3579 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 189: /* new_local_name: L_DEFINED_NAME  */
+#line 869 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                    { (yyval.string) = rule_new_local_name_redefine((yyvsp[0].ihe)); }
+#line 3585 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 190: /* efun_override: L_EFUN L_COLON_COLON identifier  */
+#line 874 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                   { (yyval.number) = rule_efun_override((yyvsp[0].string)); }
+#line 3591 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 191: /* efun_override: L_EFUN L_COLON_COLON L_NEW  */
+#line 875 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                   { (yyval.number) = rule_efun_override_new(); }
+#line 3597 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 193: /* function_name: L_COLON_COLON identifier  */
+#line 886 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                           { (yyval.string) = rule_function_name_colon_colon((yyvsp[0].string)); }
+#line 3603 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 194: /* function_name: L_BASIC_TYPE L_COLON_COLON identifier  */
+#line 887 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                           { (yyval.string) = rule_function_name_type((yyvsp[-2].number), (yyvsp[0].string)); }
+#line 3609 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 195: /* function_name: identifier L_COLON_COLON identifier  */
+#line 888 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                                    { (yyval.string) = rule_function_name_obj((yyvsp[-2].string), (yyvsp[0].string)); }
+#line 3615 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 196: /* inheritance: type_modifier_list L_INHERIT string_const ';'  */
+#line 894 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { if (rule_inheritence(&(yyval.node), (yyvsp[-3].number), (yyvsp[-1].string))) { YYACCEPT; } }
+#line 3621 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 197: /* modifier_change: type_modifier_list ':'  */
+#line 899 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                          { (yyval.node) = rule_modifier_change((yyvsp[-1].number)); }
+#line 3627 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 198: /* argument: %empty  */
+#line 910 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { (yyval.argument).num_arg = 0; (yyval.argument).flags = 0; }
+#line 3633 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 200: /* argument: argument_list L_DOT_DOT_DOT  */
+#line 913 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_argument_varargs(&(yyval.argument), &(yyvsp[-1].argument)); }
+#line 3639 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 201: /* argument_list: param_decl  */
+#line 919 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_argument_list_single(&(yyval.argument), (yyvsp[0].number)); }
+#line 3645 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 202: /* argument_list: argument_list ',' param_decl  */
+#line 921 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_argument_list_multi(&(yyval.argument), &(yyvsp[-2].argument), (yyvsp[0].number)); }
+#line 3651 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 203: /* param_decl: arg_type optional_star  */
+#line 931 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { (yyval.number) = rule_param_decl_typed((yyvsp[-1].number) | (yyvsp[0].number)); }
+#line 3657 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 204: /* param_decl: arg_type optional_star new_local_name optional_default_arg_value  */
+#line 933 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { (yyval.number) = rule_param_decl_typed_name((yyvsp[-3].number) | (yyvsp[-2].number), (yyvsp[-1].string), (yyvsp[0].node)); }
+#line 3663 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 205: /* param_decl: new_local_name  */
+#line 935 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { (yyval.number) = rule_param_decl_untyped_name((yyvsp[0].string)); }
+#line 3669 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 206: /* optional_default_arg_value: %empty  */
+#line 940 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                          { (yyval.node) = 0; }
+#line 3675 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 207: /* optional_default_arg_value: ':' L_FUNCTION_OPEN comma_expr ':' ')'  */
+#line 941 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                            { (yyval.node) = rule_default_arg_value((yyvsp[-2].node)); }
+#line 3681 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 208: /* local_name_list: new_local_def  */
+#line 947 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_local_name_list_single(&(yyval.decl), (yyvsp[0].node)); }
+#line 3687 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 209: /* local_name_list: new_local_def ',' local_name_list  */
+#line 949 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_local_name_list_multi(&(yyval.decl), (yyvsp[-2].node), &(yyvsp[0].decl)); }
+#line 3693 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 210: /* new_local_def: optional_star new_local_name  */
+#line 955 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { (yyval.node) = rule_new_local_def((yyvsp[0].string), (yyvsp[-1].number)); }
+#line 3699 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 211: /* new_local_def: optional_star new_local_name L_ASSIGN expr  */
+#line 957 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { (yyval.node) = rule_new_local_def_with_init((yyvsp[-2].string), (yyvsp[-3].number), (yyvsp[-1].number), (yyvsp[0].node)); }
+#line 3705 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 212: /* single_new_local_def: arg_type optional_star new_local_name  */
+#line 963 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_single_new_local_def(&(yyval.number), (yyvsp[-2].number) | (yyvsp[-1].number), (yyvsp[0].string)); }
+#line 3711 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 213: /* single_new_local_def_with_init: single_new_local_def L_ASSIGN expr  */
+#line 969 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { (yyval.node) = rule_single_new_local_def_with_init((yyvsp[-2].number), (yyvsp[-1].number), (yyvsp[0].node)); }
+#line 3717 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 216: /* new_name: optional_star identifier  */
+#line 985 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                         { rule_new_name((yyvsp[-1].number), (yyvsp[0].string)); }
+#line 3723 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 217: /* new_name: optional_star identifier L_ASSIGN expr  */
+#line 986 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                           { rule_new_name_with_init((yyvsp[-3].number), (yyvsp[-2].string), (yyvsp[-1].number), (yyvsp[0].node)); }
+#line 3729 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 218: /* lambda_return_type: L_BASIC_TYPE  */
+#line 997 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                { rule_lambda_return_type(&(yyval.func_block), (yyvsp[0].number)); }
+#line 3735 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 219: /* functional_open: L_FUNCTION_OPEN efun_override  */
+#line 1005 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                 { (yyval.number) = rule_functional_open((yyvsp[0].number)); }
+#line 3741 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 220: /* assoc_pair: expr ':' expr  */
+#line 1015 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                             { rule_assoc_pair(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 3747 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 221: /* spread_expr: expr  */
+#line 1020 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                        { rule_spread_expr_normal(&(yyval.node), (yyvsp[0].node)); }
+#line 3753 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 222: /* spread_expr: expr L_DOT_DOT_DOT  */
+#line 1021 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                        { rule_spread_expr_dots(&(yyval.node), (yyvsp[-1].node)); }
+#line 3759 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 223: /* arg_list: spread_expr  */
+#line 1027 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_arg_list_single(&(yyval.node), (yyvsp[0].node)); }
+#line 3765 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 224: /* arg_list: arg_list ',' spread_expr  */
+#line 1029 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_arg_list_multi(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 3771 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 225: /* opt_arg_list: %empty  */
+#line 1035 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                  { rule_opt_arg_list_empty(&(yyval.node)); }
+#line 3777 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 226: /* opt_arg_list: arg_list  */
+#line 1036 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                  { rule_opt_arg_list(&(yyval.node), (yyvsp[0].node)); }
+#line 3783 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 227: /* opt_arg_list: arg_list ','  */
+#line 1037 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                  { rule_opt_arg_list(&(yyval.node), (yyvsp[-1].node)); }
+#line 3789 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 228: /* pair_list: assoc_pair  */
+#line 1043 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_pair_list_single(&(yyval.node), (yyvsp[0].node)); }
+#line 3795 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 229: /* pair_list: pair_list ',' assoc_pair  */
+#line 1045 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+    { rule_pair_list_multi(&(yyval.node), (yyvsp[-2].node), (yyvsp[0].node)); }
+#line 3801 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 230: /* opt_pair_list: %empty  */
+#line 1051 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                   { rule_opt_pair_list_empty(&(yyval.node)); }
+#line 3807 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 231: /* opt_pair_list: pair_list  */
+#line 1052 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                   { rule_opt_pair_list(&(yyval.node), (yyvsp[0].node)); }
+#line 3813 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 232: /* opt_pair_list: pair_list ','  */
+#line 1053 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                   { rule_opt_pair_list(&(yyval.node), (yyvsp[-1].node)); }
+#line 3819 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 233: /* lvalue_list: %empty  */
+#line 1058 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                            { (yyval.node) = rule_lvalue_list_empty(); }
+#line 3825 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 234: /* lvalue_list: ',' lvalue lvalue_list  */
+#line 1059 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                  { (yyval.node) = rule_lvalue_list((yyvsp[-1].node), (yyvsp[0].node)); }
+#line 3831 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 235: /* expr_or_block: block  */
+#line 1064 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                         { (yyval.node) = rule_expr_or_block_block((yyvsp[0].decl)); }
+#line 3837 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 236: /* expr_or_block: '(' comma_expr ')'  */
+#line 1065 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                         { (yyval.node) = rule_expr_or_block_expr((yyvsp[-1].node)); }
+#line 3843 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 239: /* string: string_literal  */
+#line 1081 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                  { rule_string(&(yyval.node), (yyvsp[0].string)); }
+#line 3849 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 240: /* template_literal: L_TEMPLATE_HEAD expr template_parts  */
+#line 1093 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                                { rule_template_literal(&(yyval.node), (yyvsp[-2].string), (yyvsp[-1].node), (yyvsp[0].node)); }
+#line 3855 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 241: /* template_parts: L_TEMPLATE_TAIL  */
+#line 1097 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                                      { rule_template_parts_tail(&(yyval.node), (yyvsp[0].string)); }
+#line 3861 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 242: /* template_parts: L_TEMPLATE_MIDDLE expr template_parts  */
+#line 1098 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                                       { rule_template_parts_middle(&(yyval.node), (yyvsp[-2].string), (yyvsp[-1].node), (yyvsp[0].node)); }
+#line 3867 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 245: /* string_like: string_like string  */
+#line 1109 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                               { rule_string_like_concat(&(yyval.node), (yyvsp[-1].node), (yyvsp[0].node)); }
+#line 3873 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 246: /* string_like: string_like template_literal  */
+#line 1110 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                                { rule_string_like_concat(&(yyval.node), (yyvsp[-1].node), (yyvsp[0].node)); }
+#line 3879 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 248: /* string_literal: string_literal L_STRING  */
+#line 1118 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                   { (yyval.string) = rule_string_literal_concat((yyvsp[-1].string), (yyvsp[0].string)); }
+#line 3885 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 250: /* string_const: '(' string_const ')'  */
+#line 1125 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                        { (yyval.string) = (yyvsp[-1].string); }
+#line 3891 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 251: /* string_const: string_const '+' string_const  */
+#line 1126 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                                { (yyval.string) = rule_string_literal_concat((yyvsp[-2].string), (yyvsp[0].string)); }
+#line 3897 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 252: /* number: L_NUMBER  */
+#line 1130 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+            { rule_number(&(yyval.node), (yyvsp[0].number)); }
+#line 3903 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 253: /* real: L_REAL  */
+#line 1134 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+          { rule_real(&(yyval.node), (yyvsp[0].real)); }
+#line 3909 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 254: /* constant: constant '|' constant  */
+#line 1140 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                     { rule_constant_or(&(yyval.number), (yyvsp[-2].number), (yyvsp[0].number)); }
+#line 3915 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 255: /* constant: constant '^' constant  */
+#line 1141 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                     { rule_constant_xor(&(yyval.number), (yyvsp[-2].number), (yyvsp[0].number)); }
+#line 3921 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 256: /* constant: constant '&' constant  */
+#line 1142 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                     { rule_constant_and(&(yyval.number), (yyvsp[-2].number), (yyvsp[0].number)); }
+#line 3927 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 257: /* constant: constant L_EQ_NE constant  */
+#line 1143 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                             { rule_constant_eq_ne(&(yyval.number), (yyvsp[-1].number), (yyvsp[-2].number), (yyvsp[0].number)); }
+#line 3933 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 258: /* constant: constant L_ORDER constant  */
+#line 1144 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                         { rule_constant_order(&(yyval.number), (yyvsp[-2].number), (yyvsp[-1].number), (yyvsp[0].number)); }
+#line 3939 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 259: /* constant: constant '<' constant  */
+#line 1145 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                       { rule_constant_lt(&(yyval.number), (yyvsp[-2].number), (yyvsp[0].number)); }
+#line 3945 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 260: /* constant: constant L_SHIFT constant  */
+#line 1146 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                             { rule_constant_shift(&(yyval.number), (yyvsp[-1].number), (yyvsp[-2].number), (yyvsp[0].number)); }
+#line 3951 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 261: /* constant: constant '+' constant  */
+#line 1147 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                       { rule_constant_add(&(yyval.number), (yyvsp[-2].number), (yyvsp[0].number)); }
+#line 3957 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 262: /* constant: constant '-' constant  */
+#line 1148 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                       { rule_constant_sub(&(yyval.number), (yyvsp[-2].number), (yyvsp[0].number)); }
+#line 3963 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 263: /* constant: constant '*' constant  */
+#line 1149 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                       { rule_constant_mul(&(yyval.number), (yyvsp[-2].number), (yyvsp[0].number)); }
+#line 3969 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 264: /* constant: constant '%' constant  */
+#line 1150 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                       { rule_constant_mod(&(yyval.number), (yyvsp[-2].number), (yyvsp[0].number)); }
+#line 3975 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 265: /* constant: constant '/' constant  */
+#line 1151 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                       { rule_constant_div(&(yyval.number), (yyvsp[-2].number), (yyvsp[0].number)); }
+#line 3981 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 266: /* constant: '(' constant ')'  */
+#line 1152 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                                  { (yyval.number) = (yyvsp[-1].number); }
+#line 3987 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 267: /* constant: L_NUMBER  */
+#line 1153 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                             { (yyval.number) = (yyvsp[0].number); }
+#line 3993 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 268: /* constant: '-' L_NUMBER  */
+#line 1154 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                             { rule_constant_neg(&(yyval.number), (yyvsp[0].number)); }
+#line 3999 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 269: /* constant: '!' L_NUMBER  */
+#line 1155 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                             { rule_constant_not(&(yyval.number), (yyvsp[0].number)); }
+#line 4005 "$BUILD_ROOT$/src/grammar.autogen.cc"
+    break;
+
+  case 270: /* constant: '~' L_NUMBER  */
+#line 1156 "$REPO_ROOT$/src/compiler/internal/grammar.y"
+                             { rule_constant_compl(&(yyval.number), (yyvsp[0].number)); }
+#line 4011 "$BUILD_ROOT$/src/grammar.autogen.cc"
     break;
 
 
-#line 6411 "/home/hsiao421/fluffos/build/src/grammar.autogen.cc"
+#line 4015 "$BUILD_ROOT$/src/grammar.autogen.cc"
 
         default: break;
       }
@@ -6431,6 +4035,7 @@ yyreduce:
   yylen = 0;
 
   *++yyvsp = yyval;
+  *++yylsp = yyloc;
 
   /* Now 'shift' the result of the reduction.  Determine what state
      that goes to, based on the state we popped back to and the rule
@@ -6459,7 +4064,7 @@ yyerrlab:
       ++yynerrs;
       {
         yypcontext_t yyctx
-          = {yyssp, yyesa, &yyes, &yyes_capacity, yytoken};
+          = {yyps, yytoken, &yylloc};
         char const *yymsgp = YY_("syntax error");
         int yysyntax_error_status;
         if (yychar != YYEMPTY)
@@ -6486,12 +4091,13 @@ yyerrlab:
                 yysyntax_error_status = YYENOMEM;
               }
           }
-        yyerror (yymsgp);
+        yyerror (&yylloc, yyscanner, yymsgp);
         if (yysyntax_error_status == YYENOMEM)
           YYNOMEM;
       }
     }
 
+  yyerror_range[1] = yylloc;
   if (yyerrstatus == 3)
     {
       /* If just tried and failed to reuse lookahead token after an
@@ -6506,7 +4112,7 @@ yyerrlab:
       else
         {
           yydestruct ("Error: discarding",
-                      yytoken, &yylval);
+                      yytoken, &yylval, &yylloc, yyscanner);
           yychar = YYEMPTY;
         }
     }
@@ -6560,9 +4166,9 @@ yyerrlab1:
       if (yyssp == yyss)
         YYABORT;
 
-
+      yyerror_range[1] = *yylsp;
       yydestruct ("Error: popping",
-                  YY_ACCESSING_SYMBOL (yystate), yyvsp);
+                  YY_ACCESSING_SYMBOL (yystate), yyvsp, yylsp, yyscanner);
       YYPOPSTACK (1);
       yystate = *yyssp;
       YY_STACK_PRINT (yyss, yyssp);
@@ -6576,6 +4182,9 @@ yyerrlab1:
   *++yyvsp = yylval;
   YY_IGNORE_MAYBE_UNINITIALIZED_END
 
+  yyerror_range[2] = yylloc;
+  ++yylsp;
+  YYLLOC_DEFAULT (*yylsp, yyerror_range, 2);
 
   /* Shift the error token.  */
   YY_SYMBOL_PRINT ("Shifting", YY_ACCESSING_SYMBOL (yyn), yyvsp, yylsp);
@@ -6604,7 +4213,7 @@ yyabortlab:
 | yyexhaustedlab -- YYNOMEM (memory exhaustion) comes here.  |
 `-----------------------------------------------------------*/
 yyexhaustedlab:
-  yyerror (YY_("memory exhausted"));
+  yyerror (&yylloc, yyscanner, YY_("memory exhausted"));
   yyresult = 2;
   goto yyreturnlab;
 
@@ -6619,7 +4228,7 @@ yyreturnlab:
          user semantic actions for why this is necessary.  */
       yytoken = YYTRANSLATE (yychar);
       yydestruct ("Cleanup: discarding lookahead",
-                  yytoken, &yylval);
+                  yytoken, &yylval, &yylloc, yyscanner);
     }
   /* Do not reclaim the symbols of the rule whose action triggered
      this YYABORT or YYACCEPT.  */
@@ -6628,19 +4237,46 @@ yyreturnlab:
   while (yyssp != yyss)
     {
       yydestruct ("Cleanup: popping",
-                  YY_ACCESSING_SYMBOL (+*yyssp), yyvsp);
+                  YY_ACCESSING_SYMBOL (+*yyssp), yyvsp, yylsp, yyscanner);
       YYPOPSTACK (1);
     }
-#ifndef yyoverflow
-  if (yyss != yyssa)
-    YYSTACK_FREE (yyss);
-#endif
-  if (yyes != yyesa)
-    YYSTACK_FREE (yyes);
+  yyps->yynew = 2;
+  goto yypushreturn;
+
+
+/*-------------------------.
+| yypushreturn -- return.  |
+`-------------------------*/
+yypushreturn:
   if (yymsg != yymsgbuf)
     YYSTACK_FREE (yymsg);
   return yyresult;
 }
+#undef yynerrs
+#undef yystate
+#undef yyerrstatus
+#undef yyssa
+#undef yyss
+#undef yyssp
+#undef yyvsa
+#undef yyvs
+#undef yyvsp
+#undef yylsa
+#undef yyls
+#undef yylsp
+#undef yystacksize
+#undef yyesa
+#undef yyes
+#undef yyes_capacity
+#line 1159 "$REPO_ROOT$/src/compiler/internal/grammar.y"
 
-#line 3612 "/home/hsiao421/fluffos/src/compiler/internal/grammar.y"
 
+// Public accessor for the parser's symbol-name table: maps a raw yylex
+// token number (what lpcc --tokens prints) to its grammar spelling
+// ("L_IDENTIFIER", "'{'"). Lives in the epilogue because yysymbol_name()
+// and YYTRANSLATE are file-static in the generated parser; consumed by
+// the lpcc --json staged outputs (stage_output.cc).
+const char* lpc_token_name(int token) {
+  return yysymbol_name(YY_CAST(yysymbol_kind_t, YYTRANSLATE(token)));
+}
+/* FluffOS generated-from grammar.y sha256=9bf4bfcf7fe14e7b170e86ac22994339c8ef1b964f6a65c29f5c45dc9542f946 */

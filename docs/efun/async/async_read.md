@@ -1,5 +1,4 @@
 ---
-layout: doc
 title: async / async_read
 ---
 # async_read
@@ -24,6 +23,12 @@ title: async / async_read
             // -1 for file not read
             // string file contents otherwise
         }
+
+### NOTE
+
+    When the 'this_player in call_out' driver setting is enabled,
+    this_player() inside the callback is preserved from the time the
+    request was made, like call_out().
 
 ### SEE ALSO
 
