@@ -122,6 +122,12 @@ mapping_t* mapTraverse(mapping_t* m, int (*func)(mapping_t*, mapping_node_t*, vo
 
 void dealloc_mapping(mapping_t* m) {
   debug(mapping, "mapping.c: actual free of %p\n", m);
+  // Tear the watch struct down FIRST: mapping_unpropagate_watch() walks
+  // m->table / its nodes to detach this mapping as a parent of its
+  // sub-mappings, so it must run before the table and nodes are freed below
+  // (doing it after was a heap-use-after-free -- ASan caught it via the first
+  // watch_mapping test to exercise dealloc with a still-live watch).
+  free_mapping_watch(m);
   {
     int j = m->table_size, c = MAP_COUNT(m);
     mapping_node_t *elt, *nelt, **a = m->table;
@@ -145,7 +151,6 @@ void dealloc_mapping(mapping_t* m) {
   }
 
   debug(mapping, ("in free_mapping: after table\n"));
-  free_mapping_watch(m);
   FREE(m);
   num_mappings--;
   total_mapping_size -= sizeof(mapping_t);
